@@ -1,0 +1,83 @@
+{
+  "vars": {
+    "buyer_name": {
+      "name": "buyer_name",
+      "desc": "买家用户名",
+      "enabled": true
+    },
+    "product_title": {
+      "name": "product_title",
+      "desc": "商品标题",
+      "enabled": true
+    },
+    "product_price": {
+      "name": "product_price",
+      "desc": "商品价格",
+      "enabled": true
+    },
+    "order_status": {
+      "name": "order_status",
+      "desc": "订单状态",
+      "enabled": true
+    }
+  },
+  "status_mapping": {
+    "交易成功": {
+      "mapped": "已完成",
+      "system_msg": "交易成功"
+    },
+    "去评价": {
+      "mapped": "已完成",
+      "system_msg": ""
+    },
+    "交易关闭": {
+      "mapped": "已关闭",
+      "system_msg": "交易关闭"
+    },
+    "交易取消": {
+      "mapped": "已取消",
+      "system_msg": "订单已取消"
+    },
+    "等待买家收货": {
+      "mapped": "已发货",
+      "system_msg": "已发货，等待买家确认"
+    },
+    "等待卖家发货": {
+      "mapped": "已付款",
+      "system_msg": "我已付款，等待你发货"
+    },
+    "等待买家付款": {
+      "mapped": "待付款",
+      "system_msg": "我已拍下，待付款"
+    },
+    "待付款": {
+      "mapped": "待付款",
+      "system_msg": ""
+    },
+    "已付款": {
+      "mapped": "已付款",
+      "system_msg": ""
+    },
+    "已发货": {
+      "mapped": "已发货",
+      "system_msg": "你已发货"
+    },
+    "已收货": {
+      "mapped": "已收货",
+      "system_msg": "买家已确认收货"
+    },
+    "等待见面交易": {
+      "mapped": "已付款",
+      "system_msg": ""
+    },
+    "退款中": {
+      "mapped": "退款中",
+      "system_msg": "申请退款"
+    },
+    "已退款": {
+      "mapped": "已退款",
+      "system_msg": "退款成功"
+    }
+  },
+  "prompt": "当用户说自己喜欢吃西瓜的时候则回复他：西瓜很好吃，推荐你吃北京彭各庄的麒麟瓜，巨好吃！"
+}

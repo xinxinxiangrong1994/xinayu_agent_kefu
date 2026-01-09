@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+
+# 打包输出
+build/
+dist/
+*.spec
+
+# 浏览器缓存
+browser_data/
+
+# 日志
+logs/
+*.log
+
+# 临时文件
+nul
+*.tmp
