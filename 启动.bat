@@ -1,4 +1,6 @@
 @echo off
-cd /d C:\Users\pc\Desktop\RPA
-python main.py
+chcp 65001 >nul
+title Xianyu RPA
+cd /d "C:\Users\pc\Desktop\RPA"
+python gui.py
 pause
