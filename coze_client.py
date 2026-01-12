@@ -96,6 +96,96 @@ class CozeClient:
             logger.error(f"清除上下文异常: {e}")
             return False
 
+    def list_conversations_sync(self, page_num: int = 1, page_size: int = 50) -> dict:
+        """
+        获取指定智能体的会话列表 - 同步版本
+
+        调用 Coze API: GET /v1/conversations
+
+        Args:
+            page_num: 页码，从 1 开始
+            page_size: 每页条目数，最大 50
+
+        Returns:
+            dict: {
+                'conversations': [...],  # 会话列表
+                'has_more': bool,         # 是否有更多
+                'total': int              # 总数（如果有）
+            }
+        """
+        try:
+            # 调试：打印请求参数
+            url = f"{self.base_url}/v1/conversations"
+            params = {"bot_id": self.bot_id}
+            logger.debug(f"[Coze] 请求会话列表 - URL: {url}, bot_id: {self.bot_id}, token前20字符: {self.api_token[:20]}...")
+
+            with httpx.Client(timeout=30.0) as client:
+                # 只传递必需的 bot_id 参数，其他可选参数可能导致 400 错误
+                response = client.get(
+                    url,
+                    headers=self.headers,
+                    params=params
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                logger.debug(f"获取会话列表响应: {data}")
+
+                if data.get("code") == 0:
+                    result = data.get("data", {})
+                    conversations = result.get("conversations", [])
+                    has_more = result.get("has_more", False)
+                    logger.info(f"[Coze] 获取会话列表成功，共 {len(conversations)} 个会话")
+                    return {
+                        'conversations': conversations,
+                        'has_more': has_more,
+                        'total': len(conversations)
+                    }
+                else:
+                    logger.error(f"获取会话列表失败: {data}")
+                    return {'conversations': [], 'has_more': False, 'total': 0}
+
+        except Exception as e:
+            logger.error(f"获取会话列表异常: {e}")
+            return {'conversations': [], 'has_more': False, 'total': 0}
+
+    def delete_conversation_sync(self, conversation_id: str) -> bool:
+        """
+        删除指定会话 - 同步版本
+
+        调用 Coze API: DELETE /v1/conversations/{conversation_id}
+
+        Args:
+            conversation_id: 会话ID
+
+        Returns:
+            是否删除成功
+        """
+        if not conversation_id:
+            return False
+
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                response = client.delete(
+                    f"{self.base_url}/v1/conversations/{conversation_id}",
+                    headers=self.headers,
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                logger.debug(f"删除会话响应: {data}")
+
+                if data.get("code") == 0:
+                    logger.info(f"[Coze] 成功删除会话: {conversation_id}")
+                    return True
+                else:
+                    logger.error(f"删除会话失败: {data}")
+                    return False
+
+        except Exception as e:
+            logger.error(f"删除会话异常: {e}")
+            return False
+
     async def create_conversation(self, user_id: str) -> Optional[str]:
         """
         为用户创建一个新的会话
@@ -108,10 +198,11 @@ class CozeClient:
         """
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
+                # 必须传 bot_id，否则创建的会话无法在列表中按 bot_id 查询
                 response = await client.post(
                     f"{self.base_url}/v1/conversation/create",
                     headers=self.headers,
-                    json={}
+                    json={"bot_id": self.bot_id}
                 )
                 response.raise_for_status()
                 data = response.json()
@@ -129,6 +220,55 @@ class CozeClient:
         except Exception as e:
             logger.error(f"创建会话异常: {e}")
             return None
+
+    async def get_conversation_history(self, conversation_id: str, limit: int = 10) -> list:
+        """
+        获取会话的历史消息记录
+
+        Args:
+            conversation_id: 会话ID
+            limit: 获取的消息数量（每轮对话包含问+答，所以实际轮数 = limit/2）
+
+        Returns:
+            list: 消息列表，格式 [{'role': 'user'/'assistant', 'content': '...'}]
+        """
+        if not conversation_id:
+            return []
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                # limit 需要放在请求体中
+                response = await client.post(
+                    f"{self.base_url}/v1/conversation/message/list",
+                    headers=self.headers,
+                    params={"conversation_id": conversation_id},
+                    json={"limit": limit, "order": "desc"}  # desc: 最新的在前
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                if data.get("code") == 0:
+                    messages = data.get("data", [])
+                    # 过滤出问答消息，转换格式
+                    result = []
+                    for msg in messages:
+                        msg_type = msg.get("type", "")
+                        if msg_type in ["question", "answer"]:
+                            role = "user" if msg.get("role") == "user" else "assistant"
+                            content = msg.get("content", "")
+                            result.append({"role": role, "content": content})
+
+                    # 反转顺序（因为 API 返回的是倒序，我们需要正序）
+                    result.reverse()
+                    logger.info(f"[Coze] 获取会话历史成功: conversation_id={conversation_id}, 消息数={len(result)}")
+                    return result
+                else:
+                    logger.error(f"获取会话历史失败: {data}")
+                    return []
+
+        except Exception as e:
+            logger.error(f"获取会话历史异常: {e}")
+            return []
 
     async def chat(
         self,
@@ -189,13 +329,18 @@ class CozeClient:
 
         # parameters: 用于传递对话流开始节点的输入参数
         payload["parameters"] = parameters
-        logger.info(f"[Coze] 传递对话流参数: {parameters}")
+        # 简化日志输出：只显示参数键名，避免长内容刷屏
+        param_keys = list(parameters.keys())
+        logger.info(f"[Coze] 传递对话流参数: {param_keys}")
 
         # 调试日志：详细请求内容（使用debug级别避免刷屏）
-        logger.debug(f"[Coze] 用户消息内容: {user_message}")
-        logger.debug(f"[Coze] parameters内容: {parameters}")
-        logger.debug(f"[Coze] custom_variables内容: {payload.get('custom_variables', {})}")
-        logger.debug(f"[Coze] 完整请求payload: {payload}")
+        # 对于包含换行的内容，单独输出以保持可读性
+        if "[历史会话记录]" in user_message:
+            logger.debug(f"[Coze] 用户消息包含历史上下文，内容如下:\n{user_message}")
+        else:
+            logger.debug(f"[Coze] 用户消息内容: {user_message}")
+        # 简化参数日志，避免输出过长
+        logger.debug(f"[Coze] custom_variables: {payload.get('custom_variables', {})}")
 
         # conversation_id 必须作为 URL 查询参数传递！
         url = f"{self.base_url}/v3/chat"

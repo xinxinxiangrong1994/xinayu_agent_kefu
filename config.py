@@ -183,6 +183,18 @@ class Config:
     INACTIVE_MESSAGE: str = os.getenv("INACTIVE_MESSAGE", "[inactive]")  # 发送给Coze的触发消息
     INACTIVE_SKIP_RESPONSE: str = os.getenv("INACTIVE_SKIP_RESPONSE", "[inact_skip]")  # Coze跳过发送的回复
 
+    # 新会话回忆配置（跨商品上下文传递）
+    MEMORY_ENABLED: bool = os.getenv("MEMORY_ENABLED", "true").lower() == "true"  # 是否启用新会话回忆
+    MEMORY_CONTEXT_ROUNDS: int = int(os.getenv("MEMORY_CONTEXT_ROUNDS", "5"))  # 获取历史对话轮数
+
+    # 消息合并配置（防止用户分段发送导致AI回复混乱）
+    MESSAGE_MERGE_ENABLED: bool = os.getenv("MESSAGE_MERGE_ENABLED", "true").lower() == "true"  # 是否启用消息合并
+    MESSAGE_MERGE_WAIT_SECONDS: float = float(os.getenv("MESSAGE_MERGE_WAIT_SECONDS", "3"))  # 等待合并的时间窗口（秒）
+    MESSAGE_MERGE_MIN_LENGTH: int = int(os.getenv("MESSAGE_MERGE_MIN_LENGTH", "5"))  # 低于此长度的消息触发等待
+
+    # 会话切换延迟配置（防止页面切换过快导致元素找不到）
+    CONVERSATION_ENTER_DELAY: float = float(os.getenv("CONVERSATION_ENTER_DELAY", "1.5"))  # 进入会话后等待时间（秒）
+
     # 浏览器配置
     HEADLESS: bool = os.getenv("HEADLESS", "false").lower() == "true"
     USER_DATA_DIR: str = "./browser_data"  # 浏览器数据目录，用于保持登录状态

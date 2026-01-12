@@ -13,7 +13,7 @@ def set_gui_conversation_callback(callback: Optional[Callable]):
     设置GUI对话记录回调函数
 
     Args:
-        callback: 回调函数，签名为 (msg_type, username, content, order_status, level)
+        callback: 回调函数，签名为 (msg_type, username, content, conv_id, order_status, level)
     """
     global _gui_conversation_callback
     _gui_conversation_callback = callback
@@ -61,8 +61,9 @@ def setup_logger():
 
 
 def log_conversation(buyer_id: str, buyer_msg: str, bot_reply: str,
-                     product_info: str = "", order_status: str = ""):
-    """记录对话日志"""
+                     product_info: str = "", order_status: str = "",
+                     conversation_id: str = ""):
+    """记录对话日志（用户-AI对话）"""
     conversation_logger = logger.bind(conversation=True)
     conversation_logger.info(
         f"买家ID: {buyer_id} | 商品: {product_info} | 买家: {buyer_msg} | 回复: {bot_reply}"
@@ -72,8 +73,24 @@ def log_conversation(buyer_id: str, buyer_msg: str, bot_reply: str,
     if _gui_conversation_callback:
         try:
             # 记录用户消息
-            _gui_conversation_callback("user", buyer_id, buyer_msg, order_status, "INFO")
+            _gui_conversation_callback("user", buyer_id, buyer_msg, conversation_id, order_status, "INFO")
             # 记录AI回复
-            _gui_conversation_callback("AI", buyer_id, bot_reply, order_status, "INFO")
+            _gui_conversation_callback("AI", buyer_id, bot_reply, conversation_id, order_status, "INFO")
+        except Exception as e:
+            logger.debug(f"GUI回调失败: {e}")
+
+
+def log_system_message(buyer_id: str, message: str, order_status: str = "",
+                       conversation_id: str = ""):
+    """记录系统主动发送的消息（如 Inactive 主动问候，没有用户消息）"""
+    conversation_logger = logger.bind(conversation=True)
+    conversation_logger.info(
+        f"买家ID: {buyer_id} | [系统主动发送] | 回复: {message}"
+    )
+
+    # 调用GUI回调（如果已注册）- 只记录AI发送的消息
+    if _gui_conversation_callback:
+        try:
+            _gui_conversation_callback("AI", buyer_id, message, conversation_id, order_status, "INFO")
         except Exception as e:
             logger.debug(f"GUI回调失败: {e}")

@@ -216,7 +216,14 @@ class XianyuBrowser:
             """, index)
 
             if result:
-                await asyncio.sleep(1)
+                # 使用配置的延迟时间，等待会话内容和输入框加载
+                enter_delay = Config.CONVERSATION_ENTER_DELAY
+                await asyncio.sleep(enter_delay)
+                # 等待输入框出现
+                try:
+                    await self.page.wait_for_selector('textarea, [contenteditable="true"]', timeout=3000)
+                except:
+                    logger.warning(f"等待输入框超时，但仍继续: {conversation.get('buyer_name')}")
                 logger.info(f"进入会话: {conversation.get('buyer_name')}")
                 return True
             return False
@@ -256,7 +263,7 @@ class XianyuBrowser:
                     ];
 
                     // 闲鱼消息结构: 使用 message-row 作为消息容器
-                    // 通过"已读"标记区分买家/卖家: 有"已读"的是卖家消息
+                    // 通过头像位置区分买家/卖家: 头像在右边是卖家消息，头像在左边是买家消息
                     const msgRows = main.querySelectorAll('[class*="message-row--"]');
 
                     msgRows.forEach(row => {
@@ -264,9 +271,15 @@ class XianyuBrowser:
                         const contentEl = row.querySelector('[class*="message-content--"]');
                         const imageContainer = row.querySelector('[class*="image-container--"]');
 
-                        // 检查是否有"已读"标记来判断发送者
-                        const hasReadMark = row.innerText.includes('已读');
-                        const sender = hasReadMark ? 'seller' : 'buyer';
+                        // 通过头像位置判断发送者（更可靠，不受"已读"状态影响）
+                        const avatar = row.querySelector('[class*="avatar"]');
+                        let sender = 'buyer';  // 默认为买家
+                        if (avatar && contentEl) {
+                            const avatarRect = avatar.getBoundingClientRect();
+                            const contentRect = contentEl.getBoundingClientRect();
+                            // 头像在消息内容右边 = 卖家消息
+                            sender = avatarRect.left > contentRect.left ? 'seller' : 'buyer';
+                        }
 
                         // 提取图片URL（只提取原始格式，过滤掉处理过的webp预览版本）
                         const imageUrls = [];
@@ -286,10 +299,10 @@ class XianyuBrowser:
                             });
                         }
 
-                        // 提取文本内容（去掉"已读"标记）
+                        // 提取文本内容（去掉"已读"和"未读"标记）
                         let text = '';
                         if (contentEl) {
-                            text = contentEl.innerText.replace('已读', '').trim();
+                            text = contentEl.innerText.replace('已读', '').replace('未读', '').trim();
                             // 如果内容只是"图片"两个字，说明是纯图片消息
                             if (text === '图片' && imageUrls.length > 0) {
                                 text = '';
@@ -385,141 +398,204 @@ class XianyuBrowser:
             logger.debug(f"获取商品信息失败: {e}")
             return {}
 
-    async def get_user_id(self) -> Optional[str]:
+    async def get_user_id(self, max_retries: int = 10) -> Optional[str]:
         """
         获取当前会话的用户唯一ID（闲鱼号）
 
         从聊天页面的"闲鱼号"链接中提取用户ID
         链接格式: https://www.goofish.com/personal?userId=XXXXXXXXXX
 
+        Args:
+            max_retries: 最大重试次数，默认10次（每次间隔1秒）
+
         Returns:
             用户ID字符串，如果获取失败返回 None
         """
-        try:
-            user_id = await self.page.evaluate("""
-                () => {
-                    const main = document.querySelector('main');
-                    if (!main) return null;
+        for attempt in range(max_retries):
+            try:
+                user_id = await self.page.evaluate("""
+                    () => {
+                        const main = document.querySelector('main');
+                        if (!main) return null;
 
-                    // 查找包含 "闲鱼号" 的链接
-                    const links = main.querySelectorAll('a[href*="personal?userId="]');
-                    for (const link of links) {
-                        const href = link.href || link.getAttribute('href');
-                        if (href) {
-                            const match = href.match(/userId=(\d+)/);
-                            if (match) {
-                                return match[1];
+                        // 查找包含 "闲鱼号" 的链接
+                        const links = main.querySelectorAll('a[href*="personal?userId="]');
+                        for (const link of links) {
+                            const href = link.href || link.getAttribute('href');
+                            if (href) {
+                                const match = href.match(/userId=(\d+)/);
+                                if (match) {
+                                    return match[1];
+                                }
                             }
                         }
-                    }
 
-                    // 备选：查找所有链接，找包含 userId 参数的
-                    const allLinks = main.querySelectorAll('a');
-                    for (const link of allLinks) {
-                        const href = link.href || link.getAttribute('href');
-                        if (href && href.includes('userId=')) {
-                            const match = href.match(/userId=(\d+)/);
-                            if (match) {
-                                return match[1];
+                        // 备选：查找所有链接，找包含 userId 参数的
+                        const allLinks = main.querySelectorAll('a');
+                        for (const link of allLinks) {
+                            const href = link.href || link.getAttribute('href');
+                            if (href && href.includes('userId=')) {
+                                const match = href.match(/userId=(\d+)/);
+                                if (match) {
+                                    return match[1];
+                                }
                             }
                         }
+
+                        return null;
                     }
+                """)
 
-                    return null;
-                }
-            """)
+                if user_id:
+                    logger.debug(f"获取到用户ID: {user_id}")
+                    return user_id
 
-            if user_id:
-                logger.debug(f"获取到用户ID: {user_id}")
-            else:
-                logger.debug("未能获取用户ID")
-            return user_id
+                # 未获取到，等待后重试
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(1)
 
-        except Exception as e:
-            logger.error(f"获取用户ID失败: {e}")
-            return None
+            except Exception as e:
+                logger.error(f"获取用户ID失败: {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(1)
 
-    async def get_item_id(self) -> Optional[str]:
+        logger.warning(f"获取用户ID失败，已重试 {max_retries} 次")
+        return None
+
+    async def get_item_id(self, max_retries: int = 10) -> Optional[str]:
         """
         获取当前会话关联的商品ID
 
         从商品卡片链接中提取商品ID
         链接格式: https://www.goofish.com/item?id=XXXXXXXXXX
 
+        Args:
+            max_retries: 最大重试次数，默认10次（每次间隔1秒）
+
         Returns:
             商品ID字符串，如果获取失败返回 None
         """
-        try:
-            item_id = await self.page.evaluate("""
-                () => {
-                    const main = document.querySelector('main');
-                    if (!main) return null;
+        for attempt in range(max_retries):
+            try:
+                item_id = await self.page.evaluate("""
+                    () => {
+                        const main = document.querySelector('main');
+                        if (!main) return null;
 
-                    // 查找商品链接
-                    const itemLink = main.querySelector('a[href*="item?id="], a[href*="item.htm?id="]');
-                    if (itemLink) {
-                        const href = itemLink.href || itemLink.getAttribute('href');
-                        if (href) {
-                            const match = href.match(/[?&]id=(\d+)/);
-                            if (match) {
-                                return match[1];
+                        // 查找商品链接
+                        const itemLink = main.querySelector('a[href*="item?id="], a[href*="item.htm?id="]');
+                        if (itemLink) {
+                            const href = itemLink.href || itemLink.getAttribute('href');
+                            if (href) {
+                                const match = href.match(/[?&]id=(\d+)/);
+                                if (match) {
+                                    return match[1];
+                                }
                             }
                         }
-                    }
 
-                    // 备选：查找所有包含 item 和 id 的链接
-                    const allLinks = main.querySelectorAll('a[href*="item"]');
-                    for (const link of allLinks) {
-                        const href = link.href || link.getAttribute('href');
-                        if (href) {
-                            const match = href.match(/[?&]id=(\d+)/);
-                            if (match) {
-                                return match[1];
+                        // 备选：查找所有包含 item 和 id 的链接
+                        const allLinks = main.querySelectorAll('a[href*="item"]');
+                        for (const link of allLinks) {
+                            const href = link.href || link.getAttribute('href');
+                            if (href) {
+                                const match = href.match(/[?&]id=(\d+)/);
+                                if (match) {
+                                    return match[1];
+                                }
                             }
                         }
+
+                        return null;
                     }
+                """)
 
-                    return null;
-                }
-            """)
+                if item_id:
+                    logger.debug(f"获取到商品ID: {item_id}")
+                    return item_id
 
-            if item_id:
-                logger.debug(f"获取到商品ID: {item_id}")
-            else:
-                logger.debug("未能获取商品ID（可能是已完成交易的会话）")
-            return item_id
+                # 未获取到，等待后重试
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(1)
 
-        except Exception as e:
-            logger.error(f"获取商品ID失败: {e}")
-            return None
+            except Exception as e:
+                logger.error(f"获取商品ID失败: {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(1)
+
+        logger.debug("未能获取商品ID（可能是已完成交易的会话）")
+        return None
 
     async def send_message(self, content: str) -> bool:
         """发送消息"""
-        try:
-            # 找到输入框并输入
-            input_elem = await self.page.query_selector('textarea, [contenteditable="true"]')
+        max_retries = 3
 
-            if not input_elem:
-                logger.error("未找到消息输入框")
-                return False
+        for attempt in range(max_retries):
+            try:
+                # 等待输入框加载（多种选择器尝试）
+                input_selectors = [
+                    'textarea[placeholder*="输入"]',
+                    'textarea[placeholder*="消息"]',
+                    'textarea',
+                    '[contenteditable="true"]',
+                    '[class*="input"][class*="message"]',
+                    '[class*="editor"]',
+                    'div[class*="textarea"]',
+                ]
 
-            await input_elem.click()
-            await input_elem.fill(content)
+                input_elem = None
+                for selector in input_selectors:
+                    input_elem = await self.page.query_selector(selector)
+                    if input_elem:
+                        logger.debug(f"找到输入框，选择器: {selector}")
+                        break
 
-            # 点击发送按钮或按回车
-            send_btn = await self.page.query_selector('[class*="send-btn"], button:has-text("发送")')
-            if send_btn:
-                await send_btn.click()
-            else:
-                await input_elem.press("Enter")
+                if not input_elem:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"未找到消息输入框，重试 {attempt + 1}/{max_retries}")
+                        await asyncio.sleep(1)
+                        continue
+                    else:
+                        logger.error("未找到消息输入框，已达最大重试次数")
+                        return False
 
-            await asyncio.sleep(0.5)
-            logger.info(f"消息已发送: {content[:50]}...")
-            return True
+                await input_elem.click()
+                await asyncio.sleep(0.2)
+                await input_elem.fill(content)
+                await asyncio.sleep(0.2)
 
-        except Exception as e:
-            logger.error(f"发送消息失败: {e}")
-            return False
+                # 点击发送按钮或按回车
+                send_selectors = [
+                    '[class*="send-btn"]',
+                    '[class*="send"][class*="button"]',
+                    'button:has-text("发送")',
+                    '[class*="btn"]:has-text("发送")',
+                ]
+
+                send_btn = None
+                for selector in send_selectors:
+                    send_btn = await self.page.query_selector(selector)
+                    if send_btn:
+                        break
+
+                if send_btn:
+                    await send_btn.click()
+                else:
+                    await input_elem.press("Enter")
+
+                await asyncio.sleep(0.5)
+                logger.info(f"消息已发送: {content[:50]}...")
+                return True
+
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"发送消息尝试失败: {e}，重试 {attempt + 1}/{max_retries}")
+                    await asyncio.sleep(1)
+                else:
+                    logger.error(f"发送消息失败: {e}")
+                    return False
+
+        return False
 
     async def go_back_to_list(self):
         """切换到通知消息，让其他会话的新消息能显示未读"""
@@ -542,6 +618,6 @@ class XianyuBrowser:
                     return false;
                 }
             """)
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.3)  # 短暂等待页面响应
         except Exception as e:
             logger.debug(f"切换会话失败: {e}")

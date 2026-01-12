@@ -175,6 +175,22 @@ class XianyuGUI:
         self.inactive_timeout_spinbox.pack(side="left", padx=2)
         ttk.Label(inactive_frame, text="分钟").pack(side="left")
 
+        # 会话切换延迟设置
+        ttk.Label(config_frame, text="会话切入延迟:").grid(row=5, column=0, sticky="w", pady=5)
+        switch_delay_frame = ttk.Frame(config_frame)
+        switch_delay_frame.grid(row=5, column=1, sticky="w", pady=5, padx=5)
+
+        self.enter_delay_var = tk.StringVar(value="1.5")
+        ttk.Spinbox(
+            switch_delay_frame,
+            from_=0.5,
+            to=5.0,
+            increment=0.5,
+            textvariable=self.enter_delay_var,
+            width=4
+        ).pack(side="left", padx=2)
+        ttk.Label(switch_delay_frame, text="秒 (进入会话后等待页面加载)").pack(side="left")
+
         # 数据库配置区域
         db_frame = ttk.LabelFrame(self.root, text="数据库配置 (对话记忆)", padding=10)
         db_frame.pack(fill="x", padx=20, pady=10)
@@ -300,11 +316,47 @@ class XianyuGUI:
         # 测试白名单按钮
         user_mgmt_btn = ttk.Button(
             control_frame,
-            text="测试白名单",
+            text="上下文管理",
             command=self._open_user_management_popup,
             width=12
         )
         user_mgmt_btn.pack(side="right", padx=5)
+
+        # 新会话回忆按钮
+        memory_btn = ttk.Button(
+            control_frame,
+            text="新会话回忆",
+            command=self._open_memory_settings_popup,
+            width=12
+        )
+        memory_btn.pack(side="right", padx=5)
+
+        # 消息合并按钮
+        merge_btn = ttk.Button(
+            control_frame,
+            text="消息合并",
+            command=self._open_merge_settings_popup,
+            width=12
+        )
+        merge_btn.pack(side="right", padx=5)
+
+        # Coze会话管理按钮
+        coze_session_btn = ttk.Button(
+            control_frame,
+            text="Coze会话",
+            command=self._open_coze_sessions_popup,
+            width=12
+        )
+        coze_session_btn.pack(side="right", padx=5)
+
+        # 清空数据库按钮
+        clear_db_btn = ttk.Button(
+            control_frame,
+            text="清空数据库",
+            command=self._clear_database,
+            width=12
+        )
+        clear_db_btn.pack(side="right", padx=5)
 
         # 日志区域 - 使用 Notebook 双标签页
         log_frame = ttk.LabelFrame(self.root, text="运行日志", padding=10)
@@ -319,20 +371,22 @@ class XianyuGUI:
         self.log_notebook.add(conv_tab, text="对话记录")
 
         # 对话记录表格
-        conv_columns = ('time', 'level', 'type', 'username', 'content', 'order_status')
+        conv_columns = ('time', 'level', 'type', 'username', 'content', 'conv_id', 'order_status')
         self.conv_tree = ttk.Treeview(conv_tab, columns=conv_columns, show='headings', height=10)
         self.conv_tree.heading('time', text='时间')
         self.conv_tree.heading('level', text='级别')
         self.conv_tree.heading('type', text='类型')
         self.conv_tree.heading('username', text='用户名')
         self.conv_tree.heading('content', text='内容')
+        self.conv_tree.heading('conv_id', text='会话ID')
         self.conv_tree.heading('order_status', text='订单状态')
 
         self.conv_tree.column('time', width=70, minwidth=60, anchor='center')
         self.conv_tree.column('level', width=50, minwidth=40, anchor='center')
         self.conv_tree.column('type', width=50, minwidth=40, anchor='center')
         self.conv_tree.column('username', width=100, minwidth=80, anchor='center')
-        self.conv_tree.column('content', width=600, minwidth=300, anchor='w')
+        self.conv_tree.column('content', width=450, minwidth=250, anchor='w')
+        self.conv_tree.column('conv_id', width=180, minwidth=120, anchor='center')
         self.conv_tree.column('order_status', width=80, minwidth=60, anchor='center')
 
         # 对话表格滚动条
@@ -433,6 +487,8 @@ class XianyuGUI:
         self.inactive_enabled_var.set(os.getenv("INACTIVE_ENABLED", "true").lower() == "true")
         self.inactive_timeout_var.set(os.getenv("INACTIVE_TIMEOUT_MINUTES", "3"))
         self._toggle_inactive_settings()  # 更新spinbox状态
+        # 会话切换延迟配置
+        self.enter_delay_var.set(os.getenv("CONVERSATION_ENTER_DELAY", "1.5"))
         # 数据库配置
         self.db_host_var.set(os.getenv("DB_HOST", "localhost"))
         self.db_port_var.set(os.getenv("DB_PORT", "3306"))
@@ -457,6 +513,8 @@ class XianyuGUI:
             # Inactive 主动发消息配置
             set_key(str(self.env_path), "INACTIVE_ENABLED", str(self.inactive_enabled_var.get()).lower())
             set_key(str(self.env_path), "INACTIVE_TIMEOUT_MINUTES", self.inactive_timeout_var.get())
+            # 会话切换延迟配置
+            set_key(str(self.env_path), "CONVERSATION_ENTER_DELAY", self.enter_delay_var.get())
             # 数据库配置
             set_key(str(self.env_path), "DB_HOST", self.db_host_var.get())
             set_key(str(self.env_path), "DB_PORT", self.db_port_var.get())
@@ -768,175 +826,134 @@ class XianyuGUI:
         ttk.Button(bottom_frame, text="取消", command=dialog.destroy).pack(side="right", padx=5)
 
     def _open_user_management_popup(self):
-        """打开测试白名单弹窗"""
+        """打开用户上下文管理弹窗"""
         popup = tk.Toplevel(self.root)
-        popup.title("测试白名单")
-        popup.geometry("750x550")
+        popup.title("用户上下文管理")
+        popup.geometry("1100x500")
         popup.transient(self.root)
         popup.grab_set()
 
         # 标题
         ttk.Label(
             popup,
-            text="测试白名单 - 白名单用户与上下文管理",
+            text="用户上下文管理",
             font=("Microsoft YaHei", 12, "bold")
         ).pack(pady=10)
 
         # 用户列表框架
-        list_frame = ttk.LabelFrame(popup, text="用户列表", padding=10)
+        list_frame = ttk.LabelFrame(popup, text="所有咨询会话（一个用户可能有多个商品会话）", padding=10)
         list_frame.pack(fill="both", expand=True, padx=15, pady=5)
 
-        # 创建Treeview显示用户
-        columns = ('buyer_name', 'conversation_id', 'msg_count', 'whitelist')
-        tree = ttk.Treeview(list_frame, columns=columns, show='headings', height=12)
-        tree.heading('buyer_name', text='用户名')
-        tree.heading('conversation_id', text='会话ID')
-        tree.heading('msg_count', text='消息数')
-        tree.heading('whitelist', text='白名单')
-        tree.column('buyer_name', width=120)
-        tree.column('conversation_id', width=280)
-        tree.column('msg_count', width=80)
-        tree.column('whitelist', width=80)
+        # 创建一个内部框架来放置 tree 和滚动条
+        tree_container = ttk.Frame(list_frame)
+        tree_container.pack(fill="both", expand=True)
 
-        # 滚动条
-        scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=tree.yview)
-        tree.configure(yscrollcommand=scrollbar.set)
+        # 创建Treeview显示会话
+        columns = ('user_id', 'buyer_name', 'item_id', 'product_title', 'conversation_id', 'last_msg_time')
+        tree = ttk.Treeview(tree_container, columns=columns, show='headings', height=12)
+        tree.heading('user_id', text='用户ID')
+        tree.heading('buyer_name', text='用户名')
+        tree.heading('item_id', text='商品ID')
+        tree.heading('product_title', text='商品标题')
+        tree.heading('conversation_id', text='会话ID')
+        tree.heading('last_msg_time', text='最后消息时间')
+        tree.column('user_id', width=180)
+        tree.column('buyer_name', width=100)
+        tree.column('item_id', width=120)
+        tree.column('product_title', width=150)
+        tree.column('conversation_id', width=220)
+        tree.column('last_msg_time', width=130)
+
+        # 垂直滚动条
+        v_scrollbar = ttk.Scrollbar(tree_container, orient="vertical", command=tree.yview)
+        v_scrollbar.pack(side="right", fill="y")
+
+        # 水平滚动条
+        h_scrollbar = ttk.Scrollbar(tree_container, orient="horizontal", command=tree.xview)
+        h_scrollbar.pack(side="bottom", fill="x")
+
+        # 配置 tree
+        tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
         tree.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
 
         def refresh_user_list():
-            """刷新用户列表"""
+            """刷新会话列表"""
             # 清空列表
             for item in tree.get_children():
                 tree.delete(item)
 
-            # 从数据库获取用户
+            # 从数据库获取所有会话
             try:
                 from db_manager import db_manager
                 if not db_manager.connection or not db_manager.connection.open:
                     db_manager.connect()
 
-                users = db_manager.get_all_users_with_status()
-                for user in users:
-                    buyer_name = user.get('buyer_name', '')
-                    conv_id = user.get('coze_conversation_id', '') or ''
-                    msg_count = user.get('msg_count', 0)
-                    is_whitelist = '是' if user.get('is_whitelist', 0) else '否'
+                sessions = db_manager.get_all_sessions_with_status()
+                for session in sessions:
+                    user_id = session.get('user_id', '')
+                    buyer_name = session.get('buyer_name', '') or ''
+                    item_id = session.get('item_id', '')
+                    product_title = session.get('product_title', '') or ''
+                    conv_id = session.get('conversation_id', '') or ''
+                    last_msg = session.get('last_message_at')
+                    last_msg_str = last_msg.strftime('%m-%d %H:%M') if last_msg else ''
 
-                    # 截断过长的会话ID
-                    conv_id_display = conv_id[:35] + '...' if len(conv_id) > 35 else conv_id
-
-                    tree.insert('', 'end', values=(buyer_name, conv_id_display, msg_count, is_whitelist),
-                               tags=('whitelist',) if user.get('is_whitelist', 0) else ())
-
-                # 设置白名单用户的背景色
-                tree.tag_configure('whitelist', background='#e8f5e9')
+                    # 存储完整值，让列宽自动截断显示
+                    tree.insert('', 'end', values=(user_id, buyer_name, item_id, product_title, conv_id, last_msg_str))
 
             except Exception as e:
-                messagebox.showerror("错误", f"获取用户列表失败: {e}")
+                messagebox.showerror("错误", f"获取会话列表失败: {e}")
 
         # 初始加载
         refresh_user_list()
 
         # 操作区域
-        action_frame = ttk.LabelFrame(popup, text="操作", padding=10)
+        action_frame = ttk.LabelFrame(popup, text="操作（选中一行后点击按钮）", padding=10)
         action_frame.pack(fill="x", padx=15, pady=10)
 
-        # 第一行：白名单操作
-        row1 = ttk.Frame(action_frame)
-        row1.pack(fill="x", pady=5)
+        # 操作按钮行
+        btn_row = ttk.Frame(action_frame)
+        btn_row.pack(fill="x", pady=5)
 
-        ttk.Label(row1, text="添加白名单用户:").pack(side="left")
-        new_user_var = tk.StringVar()
-        new_user_entry = ttk.Entry(row1, textvariable=new_user_var, width=20)
-        new_user_entry.pack(side="left", padx=5)
-
-        def add_to_whitelist():
-            """添加用户到白名单"""
-            username = new_user_var.get().strip()
-            if not username:
-                # 尝试从选中的用户添加
-                selection = tree.selection()
-                if selection:
-                    # 强制转换为字符串（Treeview会将纯数字用户名转为整数）
-                    username = str(tree.item(selection[0])['values'][0])
-
-            if not username:
-                messagebox.showwarning("警告", "请输入用户名或选择一个用户")
-                return
-
-            try:
-                from db_manager import db_manager
-                if not db_manager.connection or not db_manager.connection.open:
-                    db_manager.connect()
-
-                if db_manager.set_user_whitelist(username, True):
-                    messagebox.showinfo("成功", f"用户 [{username}] 已加入白名单")
-                    new_user_var.set('')
-                    refresh_user_list()
-                    self._log(f"用户 [{username}] 已加入白名单")
-                else:
-                    messagebox.showerror("错误", "添加白名单失败")
-            except Exception as e:
-                messagebox.showerror("错误", f"操作失败: {e}")
-
-        ttk.Button(row1, text="添加到白名单", command=add_to_whitelist).pack(side="left", padx=5)
-
-        def remove_from_whitelist():
-            """从白名单移除选中用户"""
-            selection = tree.selection()
-            if not selection:
-                messagebox.showwarning("警告", "请先选择一个用户")
-                return
-
-            # 强制转换为字符串（Treeview会将纯数字用户名转为整数）
-            username = str(tree.item(selection[0])['values'][0])
-
-            try:
-                from db_manager import db_manager
-                if not db_manager.connection or not db_manager.connection.open:
-                    db_manager.connect()
-
-                if db_manager.set_user_whitelist(username, False):
-                    messagebox.showinfo("成功", f"用户 [{username}] 已移出白名单")
-                    refresh_user_list()
-                    self._log(f"用户 [{username}] 已移出白名单")
-                else:
-                    messagebox.showerror("错误", "移出白名单失败")
-            except Exception as e:
-                messagebox.showerror("错误", f"操作失败: {e}")
-
-        ttk.Button(row1, text="移出白名单", command=remove_from_whitelist).pack(side="left", padx=5)
-
-        # 第二行：清除上下文操作
-        row2 = ttk.Frame(action_frame)
-        row2.pack(fill="x", pady=5)
+        # 说明文字
+        ttk.Label(btn_row, text="选中会话后:").pack(side="left", padx=(0, 10))
 
         def clear_context():
-            """清除选中用户的上下文"""
+            """清除选中会话的上下文"""
             selection = tree.selection()
             if not selection:
-                messagebox.showwarning("警告", "请先选择一个用户")
+                messagebox.showwarning("警告", "请先选择一个会话")
                 return
 
             values = tree.item(selection[0])['values']
-            # 强制转换为字符串（Treeview会将纯数字用户名转为整数）
-            username = str(values[0])
+            # 索引: 0=user_id, 1=buyer_name, 2=item_id, 3=product_title, 4=conv_id, 5=last_msg_time
+            user_id = str(values[0])
+            buyer_name = str(values[1])
+            item_id = str(values[2])
+            product_title = str(values[3]) if values[3] else ''
 
-            # 获取完整的会话ID
+            # 获取完整的会话ID（从 user_sessions 表）
             try:
                 from db_manager import db_manager
                 if not db_manager.connection or not db_manager.connection.open:
                     db_manager.connect()
 
-                conv_id = db_manager.get_conversation_id(username)
+                # 使用 user_id 和 item_id 获取完整的 session 信息
+                session = db_manager.get_session(user_id, item_id)
+                conv_id = session.get('conversation_id') if session else None
 
                 if not conv_id:
-                    messagebox.showwarning("警告", f"用户 [{username}] 没有会话ID，无需清除")
+                    messagebox.showwarning("警告", f"该会话没有会话ID，无需清除")
                     return
 
+                # 构建详细信息显示
+                detail_info = f"用户: {buyer_name}\n商品ID: {item_id}"
+                if product_title:
+                    detail_info += f"\n商品标题: {product_title}"
+                detail_info += f"\n会话ID: {conv_id}"
+
                 # 确认操作
-                if not messagebox.askyesno("确认", f"确定要清除用户 [{username}] 的对话上下文吗？\n\n会话ID: {conv_id}\n\n注意：这将清除AI的对话记忆，但不会删除消息记录。"):
+                if not messagebox.askyesno("确认", f"确定要清除以下会话的对话上下文吗？\n\n{detail_info}\n\n注意：这将清除AI的对话记忆，但不会删除消息记录。"):
                     return
 
                 # 使用同步方法调用Coze API清除上下文
@@ -944,18 +961,19 @@ class XianyuGUI:
                 client = CozeClient()
 
                 # 在后台线程执行，避免阻塞GUI
+                display_info = f"{buyer_name} - {product_title or item_id}"
                 def do_clear():
                     try:
                         result = client.clear_conversation_context_sync(conv_id)
                         # 使用 after 在主线程更新GUI
-                        self.root.after(0, lambda: on_clear_complete(result, username))
+                        self.root.after(0, lambda: on_clear_complete(result, display_info))
                     except Exception as e:
                         self.root.after(0, lambda: on_clear_error(e))
 
-                def on_clear_complete(success, user):
+                def on_clear_complete(success, info):
                     if success:
-                        messagebox.showinfo("成功", f"已清除用户 [{user}] 的对话上下文\n\n下次对话时，AI将不再参考之前的历史记录。")
-                        self._log(f"已清除用户 [{user}] 的对话上下文")
+                        messagebox.showinfo("成功", f"已清除会话上下文\n\n{info}\n\n下次对话时，AI将不再参考之前的历史记录。")
+                        self._log(f"已清除会话上下文: {info}")
                     else:
                         messagebox.showerror("错误", "清除上下文失败，请查看日志")
 
@@ -968,24 +986,33 @@ class XianyuGUI:
                 thread.start()
 
                 # 提示用户正在处理
-                self._log(f"正在清除用户 [{username}] 的对话上下文...")
+                self._log(f"正在清除会话上下文: {display_info}...")
 
             except Exception as e:
                 messagebox.showerror("错误", f"清除上下文失败: {e}")
 
-        ttk.Button(row2, text="清除选中用户的对话上下文", command=clear_context).pack(side="left", padx=5)
+        ttk.Button(btn_row, text="清除AI上下文", command=clear_context).pack(side="left", padx=5)
 
         def clear_local_history():
-            """清除选中用户的本地对话历史"""
+            """清除选中会话的本地对话历史"""
             selection = tree.selection()
             if not selection:
-                messagebox.showwarning("警告", "请先选择一个用户")
+                messagebox.showwarning("警告", "请先选择一个会话")
                 return
 
-            # 强制转换为字符串（Treeview会将纯数字用户名转为整数）
-            username = str(tree.item(selection[0])['values'][0])
+            values = tree.item(selection[0])['values']
+            # 索引: 0=user_id, 1=buyer_name, 2=item_id, 3=product_title, 4=conv_id, 5=last_msg_time
+            user_id = str(values[0])
+            buyer_name = str(values[1])
+            item_id = str(values[2])
+            product_title = str(values[3]) if values[3] else ''
 
-            if not messagebox.askyesno("确认", f"确定要清除用户 [{username}] 的本地对话历史吗？\n\n这将删除数据库中的对话记录。"):
+            # 构建详细信息显示
+            detail_info = f"用户: {buyer_name}\n商品ID: {item_id}"
+            if product_title:
+                detail_info += f"\n商品标题: {product_title}"
+
+            if not messagebox.askyesno("确认", f"确定要清除以下会话的本地记录吗？\n\n{detail_info}\n\n这将删除该会话在数据库中的记录。"):
                 return
 
             try:
@@ -993,16 +1020,17 @@ class XianyuGUI:
                 if not db_manager.connection or not db_manager.connection.open:
                     db_manager.connect()
 
-                if db_manager.clear_conversation_id(username):
-                    messagebox.showinfo("成功", f"已清除用户 [{username}] 的本地对话历史")
+                if db_manager.delete_session(user_id, item_id):
+                    display_info = f"{buyer_name} - {product_title or item_id}"
+                    messagebox.showinfo("成功", f"已清除会话记录: {display_info}")
                     refresh_user_list()
-                    self._log(f"已清除用户 [{username}] 的本地对话历史")
+                    self._log(f"已清除会话记录: {display_info}")
                 else:
                     messagebox.showerror("错误", "清除失败")
             except Exception as e:
                 messagebox.showerror("错误", f"清除失败: {e}")
 
-        ttk.Button(row2, text="清除本地对话历史", command=clear_local_history).pack(side="left", padx=5)
+        ttk.Button(btn_row, text="删除本地会话记录", command=clear_local_history).pack(side="left", padx=5)
 
         # 底部按钮
         bottom_frame = ttk.Frame(popup)
@@ -1010,6 +1038,414 @@ class XianyuGUI:
 
         ttk.Button(bottom_frame, text="刷新", command=refresh_user_list).pack(side="left", padx=5)
         ttk.Button(bottom_frame, text="关闭", command=popup.destroy).pack(side="right", padx=5)
+
+    def _open_memory_settings_popup(self):
+        """打开新会话回忆设置弹窗"""
+        popup = tk.Toplevel(self.root)
+        popup.title("新会话回忆设置")
+        popup.geometry("650x500")
+        popup.transient(self.root)
+        popup.grab_set()
+
+        # 标题
+        ttk.Label(
+            popup,
+            text="新会话回忆 - 跨商品上下文传递",
+            font=("Microsoft YaHei", 12, "bold")
+        ).pack(pady=10)
+
+        # 说明文字
+        desc_frame = ttk.LabelFrame(popup, text="功能说明", padding=10)
+        desc_frame.pack(fill="x", padx=15, pady=5)
+
+        desc_text = """当同一个用户从不同商品页面发起聊天时，系统会自动获取该用户之前与其他商品的对话历史，
+并将这些历史记录作为上下文传递给新会话的第一条消息，帮助AI更好地了解用户的需求和偏好。
+
+适用场景：
+• 用户咨询过商品A后，又来咨询商品B
+• 用户是回头客，之前有过购买/咨询记录
+• 需要跨商品保持对话连贯性的场景"""
+
+        ttk.Label(desc_frame, text=desc_text, justify="left", wraplength=580).pack(anchor="w")
+
+        # 设置区域
+        settings_frame = ttk.LabelFrame(popup, text="设置", padding=10)
+        settings_frame.pack(fill="x", padx=15, pady=10)
+
+        # 启用开关
+        row1 = ttk.Frame(settings_frame)
+        row1.pack(fill="x", pady=5)
+
+        self.memory_enabled_var = tk.BooleanVar(value=os.getenv("MEMORY_ENABLED", "true").lower() == "true")
+        ttk.Checkbutton(
+            row1,
+            text="启用新会话回忆功能",
+            variable=self.memory_enabled_var
+        ).pack(side="left")
+
+        # 上下文轮数设置
+        row2 = ttk.Frame(settings_frame)
+        row2.pack(fill="x", pady=5)
+
+        ttk.Label(row2, text="获取历史对话轮数:").pack(side="left")
+        self.memory_rounds_var = tk.StringVar(value=os.getenv("MEMORY_CONTEXT_ROUNDS", "5"))
+        memory_rounds_spinbox = ttk.Spinbox(
+            row2,
+            from_=1,
+            to=20,
+            textvariable=self.memory_rounds_var,
+            width=5
+        )
+        memory_rounds_spinbox.pack(side="left", padx=5)
+        ttk.Label(row2, text="轮 (每轮包含用户问+AI答)").pack(side="left")
+
+        # 示例展示区域
+        example_frame = ttk.LabelFrame(popup, text="传递给新会话的 input 内容示例", padding=10)
+        example_frame.pack(fill="both", expand=True, padx=15, pady=10)
+
+        example_text = scrolledtext.ScrolledText(
+            example_frame,
+            height=12,
+            font=("Consolas", 9),
+            bg="#f5f5f5",
+            state="normal"
+        )
+        example_text.pack(fill="both", expand=True)
+
+        # 示例内容
+        example_content = """[历史会话记录]
+会话ID: 7593074481959125027
+商品ID: 7890123456
+商品标题：小米10 PRO 内存12+512
+
+对话内容:
+user：你好，这个手机是什么颜色的？
+AI：这款是黑色的哦，成色很新。
+user：电池健康度怎么样？
+AI：电池健康度92%，续航很好的。
+user：价格能便宜点吗？
+AI：已经是最低价了呢，质量绝对有保障。
+
+当前消息：你好，这个耳机还在吗？"""
+
+        example_text.insert("1.0", example_content)
+        example_text.config(state="disabled")
+
+        # 底部按钮
+        btn_frame = ttk.Frame(popup)
+        btn_frame.pack(fill="x", padx=15, pady=10)
+
+        def save_memory_settings():
+            """保存新会话回忆设置"""
+            try:
+                set_key(str(self.env_path), "MEMORY_ENABLED", str(self.memory_enabled_var.get()).lower())
+                set_key(str(self.env_path), "MEMORY_CONTEXT_ROUNDS", self.memory_rounds_var.get())
+                load_dotenv(self.env_path, override=True)
+                messagebox.showinfo("成功", "新会话回忆设置已保存！")
+                self._log(f"新会话回忆设置已保存 - 启用: {self.memory_enabled_var.get()}, 轮数: {self.memory_rounds_var.get()}")
+                popup.destroy()
+            except Exception as e:
+                messagebox.showerror("错误", f"保存设置失败: {e}")
+
+        ttk.Button(btn_frame, text="保存", command=save_memory_settings).pack(side="right", padx=5)
+        ttk.Button(btn_frame, text="取消", command=popup.destroy).pack(side="right", padx=5)
+
+    def _open_coze_sessions_popup(self):
+        """打开Coze会话管理弹窗"""
+        from db_manager import db_manager
+        from coze_client import CozeClient
+        import threading
+        from datetime import datetime
+
+        popup = tk.Toplevel(self.root)
+        popup.title("Coze会话管理")
+        popup.geometry("900x550")
+        popup.transient(self.root)
+        popup.grab_set()
+
+        # 说明
+        ttk.Label(popup, text="查看和管理Coze服务器上的会话（从Coze API获取）", font=('', 10)).pack(pady=10)
+
+        # 列表区域
+        list_frame = ttk.Frame(popup)
+        list_frame.pack(fill="both", expand=True, padx=20, pady=10)
+
+        # 创建表格 - 根据 Coze API 返回的字段调整
+        columns = ('conversation_id', 'created_at', 'last_section_id')
+        tree = ttk.Treeview(list_frame, columns=columns, show='headings', height=15)
+        tree.heading('conversation_id', text='会话ID')
+        tree.heading('created_at', text='创建时间')
+        tree.heading('last_section_id', text='最后章节ID')
+
+        tree.column('conversation_id', width=250, minwidth=200)
+        tree.column('created_at', width=180, minwidth=150)
+        tree.column('last_section_id', width=250, minwidth=200)
+
+        scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        tree.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # 状态标签
+        status_label = ttk.Label(popup, text="")
+        status_label.pack(pady=5)
+
+        # 存储会话数据用于删除操作
+        conversations_data = []
+
+        def refresh_list():
+            """从Coze API刷新会话列表"""
+            nonlocal conversations_data
+
+            status_label.config(text="正在从Coze获取会话列表...")
+            popup.update()
+
+            def do_refresh():
+                try:
+                    coze_client = CozeClient()
+                    result = coze_client.list_conversations_sync(page_num=1, page_size=50)
+                    # 在主线程更新UI
+                    popup.after(0, lambda: on_refresh_complete(result))
+                except Exception as e:
+                    popup.after(0, lambda: on_refresh_error(e))
+
+            def on_refresh_complete(result):
+                nonlocal conversations_data
+                # 清空列表
+                for item in tree.get_children():
+                    tree.delete(item)
+
+                conversations_data = result.get('conversations', [])
+                for conv in conversations_data:
+                    conv_id = conv.get('id', '')
+                    created_at = conv.get('created_at', 0)
+                    last_section_id = conv.get('last_section_id', '')
+
+                    # 转换时间戳
+                    created_at_str = ''
+                    if created_at:
+                        try:
+                            created_at_str = datetime.fromtimestamp(int(created_at)).strftime('%Y-%m-%d %H:%M:%S')
+                        except:
+                            created_at_str = str(created_at)
+
+                    tree.insert('', 'end', values=(conv_id, created_at_str, last_section_id))
+
+                has_more = result.get('has_more', False)
+                status_text = f"共 {len(conversations_data)} 个会话"
+                if has_more:
+                    status_text += " (还有更多)"
+                status_label.config(text=status_text)
+
+            def on_refresh_error(e):
+                status_label.config(text=f"获取失败: {e}")
+                messagebox.showerror("错误", f"获取Coze会话列表失败: {e}")
+
+            # 在后台线程执行
+            threading.Thread(target=do_refresh, daemon=True).start()
+
+        def clear_all_sessions():
+            """清空所有Coze会话"""
+            if not conversations_data:
+                messagebox.showinfo("提示", "没有需要清空的会话")
+                return
+
+            if not messagebox.askyesno("确认", f"确定要删除Coze服务器上的所有 {len(conversations_data)} 个会话吗？\n\n注意：这将永久删除这些会话！"):
+                return
+
+            status_label.config(text="正在删除会话...")
+            popup.update()
+
+            def do_clear():
+                coze_client = CozeClient()
+                success_count = 0
+                fail_count = 0
+
+                for conv in conversations_data:
+                    conv_id = conv.get('id')
+                    if conv_id:
+                        try:
+                            if coze_client.delete_conversation_sync(conv_id):
+                                success_count += 1
+                            else:
+                                fail_count += 1
+                        except Exception as e:
+                            fail_count += 1
+
+                # 同时清空数据库中的conversation_id
+                db_manager.clear_all_conversation_ids()
+
+                # 更新UI（在主线程中）
+                def update_ui():
+                    status_label.config(text=f"清空完成: 成功{success_count}个, 失败{fail_count}个")
+                    refresh_list()
+                    messagebox.showinfo("完成", f"Coze会话清空完成\n\n成功: {success_count}\n失败: {fail_count}")
+                    self._log(f"已清空 {success_count} 个Coze会话")
+
+                popup.after(0, update_ui)
+
+            # 在后台线程执行清空操作
+            threading.Thread(target=do_clear, daemon=True).start()
+
+        # 按钮区域
+        btn_frame = ttk.Frame(popup)
+        btn_frame.pack(pady=15)
+
+        ttk.Button(btn_frame, text="刷新列表", command=refresh_list, width=15).pack(side="left", padx=10)
+        ttk.Button(btn_frame, text="一键清空所有会话", command=clear_all_sessions, width=20).pack(side="left", padx=10)
+        ttk.Button(btn_frame, text="关闭", command=popup.destroy, width=10).pack(side="left", padx=10)
+
+        # 初始加载
+        refresh_list()
+
+    def _clear_database(self):
+        """清空数据库所有表的数据"""
+        from db_manager import db_manager
+
+        # 简单确认
+        if not messagebox.askyesno("确认", "确定要清空所有数据库表吗？\n\n将清空：用户表、会话表、对话历史表"):
+            return
+
+        # 确保数据库已连接
+        if not db_manager.connection:
+            db_manager.connect()
+
+        if db_manager.clear_all_tables():
+            messagebox.showinfo("成功", "数据库已清空！")
+            self._log("已清空所有数据库表")
+        else:
+            messagebox.showerror("错误", "清空数据库失败，请查看日志")
+
+    def _open_merge_settings_popup(self):
+        """打开消息合并设置弹窗"""
+        popup = tk.Toplevel(self.root)
+        popup.title("消息合并设置")
+        popup.geometry("650x550")
+        popup.transient(self.root)
+        popup.grab_set()
+
+        # 标题
+        ttk.Label(
+            popup,
+            text="消息合并 - 防止用户分段发送导致AI回复混乱",
+            font=("Microsoft YaHei", 12, "bold")
+        ).pack(pady=10)
+
+        # 说明文字
+        desc_frame = ttk.LabelFrame(popup, text="功能说明", padding=10)
+        desc_frame.pack(fill="x", padx=15, pady=5)
+
+        desc_text = """当用户快速连续发送多条短消息时（如"pro"、"还有"、"吗"），系统会等待一段时间，
+将这些消息合并成一条完整的消息（"pro还有吗"）再发送给AI处理，避免AI对不完整的消息产生错误回复。
+
+工作原理：
+• 当收到长度小于阈值的短消息时，消息会进入等待队列
+• 在等待时间内收到的新消息会不断追加到队列中
+• 等待时间结束后，所有排队消息会合并成一条发送给AI
+• 如果收到一条长消息，会立即将之前排队的消息一起合并处理"""
+
+        ttk.Label(desc_frame, text=desc_text, justify="left", wraplength=580).pack(anchor="w")
+
+        # 设置区域
+        settings_frame = ttk.LabelFrame(popup, text="设置", padding=10)
+        settings_frame.pack(fill="x", padx=15, pady=10)
+
+        # 启用开关
+        row1 = ttk.Frame(settings_frame)
+        row1.pack(fill="x", pady=5)
+
+        self.merge_enabled_var = tk.BooleanVar(value=os.getenv("MESSAGE_MERGE_ENABLED", "true").lower() == "true")
+        ttk.Checkbutton(
+            row1,
+            text="启用消息合并功能",
+            variable=self.merge_enabled_var
+        ).pack(side="left")
+
+        # 等待时间设置
+        row2 = ttk.Frame(settings_frame)
+        row2.pack(fill="x", pady=5)
+
+        ttk.Label(row2, text="等待合并时间:").pack(side="left")
+        self.merge_wait_var = tk.StringVar(value=os.getenv("MESSAGE_MERGE_WAIT_SECONDS", "3"))
+        merge_wait_spinbox = ttk.Spinbox(
+            row2,
+            from_=1,
+            to=10,
+            textvariable=self.merge_wait_var,
+            width=5
+        )
+        merge_wait_spinbox.pack(side="left", padx=5)
+        ttk.Label(row2, text="秒 (收到短消息后等待多久再处理)").pack(side="left")
+
+        # 短消息阈值设置
+        row3 = ttk.Frame(settings_frame)
+        row3.pack(fill="x", pady=5)
+
+        ttk.Label(row3, text="短消息阈值:").pack(side="left")
+        self.merge_min_length_var = tk.StringVar(value=os.getenv("MESSAGE_MERGE_MIN_LENGTH", "5"))
+        merge_length_spinbox = ttk.Spinbox(
+            row3,
+            from_=1,
+            to=20,
+            textvariable=self.merge_min_length_var,
+            width=5
+        )
+        merge_length_spinbox.pack(side="left", padx=5)
+        ttk.Label(row3, text="字 (低于此长度的消息会触发合并等待)").pack(side="left")
+
+        # 示例展示区域
+        example_frame = ttk.LabelFrame(popup, text="效果示例", padding=10)
+        example_frame.pack(fill="both", expand=True, padx=15, pady=10)
+
+        example_text = scrolledtext.ScrolledText(
+            example_frame,
+            height=10,
+            font=("Consolas", 9),
+            bg="#f5f5f5",
+            state="normal"
+        )
+        example_text.pack(fill="both", expand=True)
+
+        # 示例内容
+        example_content = """场景：用户想问 "pro还有吗"，但分成3条发送
+
+未开启消息合并时：
+  [10:00:01] 用户发送: "pro"
+  [10:00:01] AI回复: "您好，请问您是想了解Pro版本吗？"  ❌ 错误回复
+  [10:00:02] 用户发送: "还有"
+  [10:00:02] AI回复: "还有什么呢？请问有什么需要帮助的？"  ❌ 错误回复
+  [10:00:03] 用户发送: "吗"
+  [10:00:03] AI回复: "？"  ❌ 错误回复
+
+开启消息合并后（等待3秒）：
+  [10:00:01] 用户发送: "pro" → 加入合并队列，等待3秒
+  [10:00:02] 用户发送: "还有" → 追加到队列，重置等待
+  [10:00:03] 用户发送: "吗" → 追加到队列，重置等待
+  [10:00:06] 3秒内无新消息，合并处理: "pro还有吗"
+  [10:00:06] AI回复: "Pro版还有货的，需要给您发链接吗？"  ✓ 正确回复"""
+
+        example_text.insert("1.0", example_content)
+        example_text.config(state="disabled")
+
+        # 底部按钮
+        btn_frame = ttk.Frame(popup)
+        btn_frame.pack(fill="x", padx=15, pady=10)
+
+        def save_merge_settings():
+            """保存消息合并设置"""
+            try:
+                set_key(str(self.env_path), "MESSAGE_MERGE_ENABLED", str(self.merge_enabled_var.get()).lower())
+                set_key(str(self.env_path), "MESSAGE_MERGE_WAIT_SECONDS", self.merge_wait_var.get())
+                set_key(str(self.env_path), "MESSAGE_MERGE_MIN_LENGTH", self.merge_min_length_var.get())
+                load_dotenv(self.env_path, override=True)
+                messagebox.showinfo("成功", "消息合并设置已保存！\n\n注意：设置将在下次启动时生效。")
+                self._log(f"消息合并设置已保存 - 启用: {self.merge_enabled_var.get()}, 等待: {self.merge_wait_var.get()}秒, 阈值: {self.merge_min_length_var.get()}字")
+                popup.destroy()
+            except Exception as e:
+                messagebox.showerror("错误", f"保存设置失败: {e}")
+
+        ttk.Button(btn_frame, text="保存", command=save_merge_settings).pack(side="right", padx=5)
+        ttk.Button(btn_frame, text="取消", command=popup.destroy).pack(side="right", padx=5)
 
     def _setup_logging(self):
         """设置日志重定向到界面"""
@@ -1084,10 +1520,10 @@ class XianyuGUI:
 
     def _register_conversation_callback(self):
         """注册对话记录回调函数"""
-        def on_conversation(msg_type, username, content, order_status, level):
+        def on_conversation(msg_type, username, content, conv_id, order_status, level):
             # 使用 after 确保在主线程执行
             self.root.after(0, lambda: self.add_conversation_record(
-                msg_type, username, content, order_status, level
+                msg_type, username, content, conv_id, order_status, level
             ))
 
         set_gui_conversation_callback(on_conversation)
@@ -1111,7 +1547,7 @@ class XianyuGUI:
         self.log_text.config(state="disabled")
 
     def add_conversation_record(self, msg_type: str, username: str, content: str,
-                                  order_status: str = "", level: str = "INFO"):
+                                  conv_id: str = "", order_status: str = "", level: str = "INFO"):
         """
         添加对话记录到表格
 
@@ -1119,6 +1555,7 @@ class XianyuGUI:
             msg_type: 消息类型 - "user" 或 "AI"
             username: 用户名
             content: 消息内容
+            conv_id: 会话ID
             order_status: 订单状态
             level: 级别 - "INFO", "WARNING", "ERROR" 等
         """
@@ -1134,6 +1571,11 @@ class XianyuGUI:
             if len(display_content) > 100:
                 display_content = display_content[:100] + "..."
 
+        # 处理会话ID显示：截断过长的ID
+        display_conv_id = conv_id if conv_id else ""
+        if len(display_conv_id) > 20:
+            display_conv_id = display_conv_id[:8] + "..." + display_conv_id[-8:]
+
         # 根据类型和级别确定行标签
         if msg_type.lower() == "user":
             tag = 'user'
@@ -1148,7 +1590,7 @@ class XianyuGUI:
 
         # 插入记录
         self.conv_tree.insert('', 'end',
-                              values=(timestamp, level, msg_type, username, display_content, order_status),
+                              values=(timestamp, level, msg_type, username, display_content, display_conv_id, order_status),
                               tags=(tag,))
         # 滚动到最新记录
         children = self.conv_tree.get_children()

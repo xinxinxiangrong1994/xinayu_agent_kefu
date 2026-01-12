@@ -86,6 +86,7 @@ class DBManager:
                         user_id VARCHAR(50) NOT NULL COMMENT '闲鱼用户唯一ID',
                         item_id VARCHAR(50) NOT NULL COMMENT '商品ID',
                         buyer_name VARCHAR(255) COMMENT '买家昵称',
+                        product_title VARCHAR(100) COMMENT '商品标题（前15字）',
                         conversation_id VARCHAR(255) COMMENT 'Coze会话ID',
                         summary TEXT COMMENT '会话摘要',
                         inactive_sent TINYINT(1) DEFAULT 0 COMMENT '是否已发送过inactive',
@@ -97,6 +98,16 @@ class DBManager:
                         UNIQUE KEY unique_user_item (user_id, item_id)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                 """)
+
+                # 检查并添加 product_title 列（兼容旧表）
+                cursor.execute("""
+                    SELECT COUNT(*) as cnt FROM information_schema.columns
+                    WHERE table_schema = DATABASE()
+                    AND table_name = 'user_sessions' AND column_name = 'product_title'
+                """)
+                if cursor.fetchone()['cnt'] == 0:
+                    cursor.execute("ALTER TABLE user_sessions ADD COLUMN product_title VARCHAR(100) COMMENT '商品标题（前15字）' AFTER buyer_name")
+                    logger.info("已添加 product_title 列到 user_sessions 表")
 
             self.connection.commit()
             logger.info("数据表初始化成功")
@@ -314,7 +325,7 @@ class DBManager:
 
     # ========== user_sessions 表操作方法 ==========
 
-    def get_or_create_session(self, user_id: str, item_id: str, buyer_name: str = None, order_status: str = None) -> dict:
+    def get_or_create_session(self, user_id: str, item_id: str, buyer_name: str = None, order_status: str = None, product_title: str = None) -> dict:
         """获取或创建用户会话"""
         try:
             with self.connection.cursor() as cursor:
@@ -326,11 +337,19 @@ class DBManager:
                 session = cursor.fetchone()
 
                 if session:
-                    # 更新最后消息时间
-                    cursor.execute(
-                        "UPDATE user_sessions SET last_message_at = NOW() WHERE user_id = %s AND item_id = %s",
-                        (user_id, item_id)
-                    )
+                    # 更新最后消息时间，同时始终更新 product_title（如果有新值）
+                    if product_title:
+                        cursor.execute(
+                            "UPDATE user_sessions SET last_message_at = NOW(), product_title = %s WHERE user_id = %s AND item_id = %s",
+                            (product_title, user_id, item_id)
+                        )
+                        # 更新返回的session对象
+                        session['product_title'] = product_title
+                    else:
+                        cursor.execute(
+                            "UPDATE user_sessions SET last_message_at = NOW() WHERE user_id = %s AND item_id = %s",
+                            (user_id, item_id)
+                        )
                     self.connection.commit()
                     return session
 
@@ -345,12 +364,12 @@ class DBManager:
                 # 继承用户已有的inactive_sent状态
                 inherit_inactive_sent = 1 if result['inactive_sent'] else 0
 
-                # 创建新会话
+                # 创建新会话（包含 product_title）
                 cursor.execute(
                     """INSERT INTO user_sessions
-                       (user_id, item_id, buyer_name, customer_type, order_status, last_message_at, inactive_sent)
-                       VALUES (%s, %s, %s, %s, %s, NOW(), %s)""",
-                    (user_id, item_id, buyer_name, customer_type, order_status, inherit_inactive_sent)
+                       (user_id, item_id, buyer_name, product_title, customer_type, order_status, last_message_at, inactive_sent)
+                       VALUES (%s, %s, %s, %s, %s, %s, NOW(), %s)""",
+                    (user_id, item_id, buyer_name, product_title, customer_type, order_status, inherit_inactive_sent)
                 )
                 self.connection.commit()
 
@@ -363,6 +382,36 @@ class DBManager:
         except Exception as e:
             logger.error(f"获取/创建会话失败: {e}")
             return None
+
+    def get_session(self, user_id: str, item_id: str) -> dict:
+        """获取指定用户和商品的会话"""
+        try:
+            self._ensure_connection()
+            with self.connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT * FROM user_sessions WHERE user_id = %s AND item_id = %s",
+                    (user_id, item_id)
+                )
+                return cursor.fetchone()
+        except Exception as e:
+            logger.error(f"获取会话失败: {e}")
+            return None
+
+    def delete_session(self, user_id: str, item_id: str) -> bool:
+        """删除指定用户和商品的会话"""
+        try:
+            self._ensure_connection()
+            with self.connection.cursor() as cursor:
+                cursor.execute(
+                    "DELETE FROM user_sessions WHERE user_id = %s AND item_id = %s",
+                    (user_id, item_id)
+                )
+            self.connection.commit()
+            logger.info(f"已删除会话: user_id={user_id}, item_id={item_id}")
+            return True
+        except Exception as e:
+            logger.error(f"删除会话失败: {e}")
+            return False
 
     def update_session_conversation_id(self, user_id: str, item_id: str, conversation_id: str) -> bool:
         """更新会话的Coze conversation_id"""
@@ -530,12 +579,15 @@ class DBManager:
         """获取所有会话及其状态（用于GUI显示）"""
         try:
             with self.connection.cursor() as cursor:
+                # 关联 users 表获取白名单状态
                 cursor.execute("""
-                    SELECT user_id, item_id, buyer_name, conversation_id,
-                           customer_type, order_status, inactive_sent,
-                           last_message_at, updated_at
-                    FROM user_sessions
-                    ORDER BY updated_at DESC
+                    SELECT s.user_id, s.item_id, s.buyer_name, s.product_title, s.conversation_id,
+                           s.customer_type, s.order_status, s.inactive_sent,
+                           s.last_message_at, s.updated_at,
+                           COALESCE(u.is_whitelist, 0) as is_whitelist
+                    FROM user_sessions s
+                    LEFT JOIN users u ON s.buyer_name = u.buyer_name
+                    ORDER BY s.updated_at DESC
                 """)
                 return cursor.fetchall()
         except Exception as e:
@@ -571,6 +623,136 @@ class DBManager:
             return True
         except Exception as e:
             logger.error(f"更新buyer_name失败: {e}")
+            return False
+
+    def get_user_other_sessions(self, user_id: str, exclude_item_id: str = None) -> list:
+        """
+        获取用户的其他会话（有conversation_id的）
+
+        Args:
+            user_id: 用户ID
+            exclude_item_id: 要排除的商品ID（当前商品）
+
+        Returns:
+            list: 其他会话列表，按最后消息时间倒序排列
+        """
+        try:
+            self._ensure_connection()
+            with self.connection.cursor() as cursor:
+                if exclude_item_id:
+                    cursor.execute(
+                        """SELECT * FROM user_sessions
+                           WHERE user_id = %s
+                           AND item_id != %s
+                           AND conversation_id IS NOT NULL
+                           AND conversation_id != ''
+                           ORDER BY last_message_at DESC""",
+                        (user_id, exclude_item_id)
+                    )
+                else:
+                    cursor.execute(
+                        """SELECT * FROM user_sessions
+                           WHERE user_id = %s
+                           AND conversation_id IS NOT NULL
+                           AND conversation_id != ''
+                           ORDER BY last_message_at DESC""",
+                        (user_id,)
+                    )
+                return cursor.fetchall()
+        except Exception as e:
+            logger.error(f"获取用户其他会话失败: {e}")
+            return []
+
+    def get_session_by_conversation_id(self, conversation_id: str) -> dict:
+        """根据conversation_id获取会话信息"""
+        try:
+            self._ensure_connection()
+            with self.connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT * FROM user_sessions WHERE conversation_id = %s",
+                    (conversation_id,)
+                )
+                return cursor.fetchone()
+        except Exception as e:
+            logger.error(f"根据conversation_id获取会话失败: {e}")
+            return None
+
+    def get_all_conversation_ids(self) -> list:
+        """获取所有的 conversation_id（从 user_sessions 和 users 表）"""
+        try:
+            self._ensure_connection()
+            conversation_ids = []
+            with self.connection.cursor() as cursor:
+                # 从 user_sessions 表获取
+                cursor.execute("""
+                    SELECT DISTINCT conversation_id, buyer_name, item_id, updated_at
+                    FROM user_sessions
+                    WHERE conversation_id IS NOT NULL AND conversation_id != ''
+                    ORDER BY updated_at DESC
+                """)
+                sessions = cursor.fetchall()
+                for s in sessions:
+                    conversation_ids.append({
+                        'conversation_id': s['conversation_id'],
+                        'buyer_name': s.get('buyer_name', ''),
+                        'item_id': s.get('item_id', ''),
+                        'source': 'user_sessions',
+                        'updated_at': str(s.get('updated_at', ''))
+                    })
+
+                # 从 users 表获取（可能有些不在 user_sessions 中）
+                cursor.execute("""
+                    SELECT DISTINCT coze_conversation_id, buyer_name, updated_at
+                    FROM users
+                    WHERE coze_conversation_id IS NOT NULL AND coze_conversation_id != ''
+                    ORDER BY updated_at DESC
+                """)
+                users = cursor.fetchall()
+                existing_ids = {c['conversation_id'] for c in conversation_ids}
+                for u in users:
+                    if u['coze_conversation_id'] not in existing_ids:
+                        conversation_ids.append({
+                            'conversation_id': u['coze_conversation_id'],
+                            'buyer_name': u.get('buyer_name', ''),
+                            'item_id': '',
+                            'source': 'users',
+                            'updated_at': str(u.get('updated_at', ''))
+                        })
+
+            logger.info(f"获取到 {len(conversation_ids)} 个会话ID")
+            return conversation_ids
+        except Exception as e:
+            logger.error(f"获取所有conversation_id失败: {e}")
+            return []
+
+    def clear_all_conversation_ids(self) -> bool:
+        """清空所有表中的 conversation_id"""
+        try:
+            self._ensure_connection()
+            with self.connection.cursor() as cursor:
+                cursor.execute("UPDATE user_sessions SET conversation_id = NULL")
+                cursor.execute("UPDATE users SET coze_conversation_id = NULL")
+                self.connection.commit()
+                logger.info("已清空所有 conversation_id")
+                return True
+        except Exception as e:
+            logger.error(f"清空conversation_id失败: {e}")
+            return False
+
+    def clear_all_tables(self):
+        """清空所有表的数据（保留表结构）"""
+        try:
+            self._ensure_connection()
+            with self.connection.cursor() as cursor:
+                # 清空所有业务表
+                cursor.execute("DELETE FROM conversation_history")
+                cursor.execute("DELETE FROM user_sessions")
+                cursor.execute("DELETE FROM users")
+                self.connection.commit()
+                logger.info("已清空所有数据库表")
+                return True
+        except Exception as e:
+            logger.error(f"清空数据库表失败: {e}")
             return False
 
 
