@@ -48,3 +48,31 @@
 | ❌ 用户发3条消息，回3条答非所问 | ✅ 聚合理解，一条精准回复 |
 | ❌ 换个商品问，AI 一脸懵 | ✅ 跨窗口记忆，上下文不丢 |
 | ❌ 用户发图片，已读不回 | ✅ 多模态理解，截图也能答 |
+
+
+## 系统界面
+<div align="center">
+  <img src="./场景案例/RPA-1.png" width="600">
+  <p>RPA系统</p>
+</div>
+
+<div align="center">
+  <img src="./场景案例/coze.png" width="600">
+  <p>coze对话流</p>
+</div>
+
+## 效果图
+<div align="center">
+  <img src="./场景案例/01.png" width="600">
+  <p>消息聚合回复示例</p>
+</div>
+
+
+
+
+
+
+
+
+
+
