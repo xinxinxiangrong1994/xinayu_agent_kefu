@@ -1,6 +1,4 @@
-# wudihaohao
-🤖 Xianyu SmartCS - 闲鱼智能客服系统
-[Image] [Image] [Image]
+# 🤖 Xianyu SmartCS - 闲鱼智能客服系统
 
 专为闲鱼卖家打造的 AI 智能客服解决方案，支持多模态理解、消息聚合回复、跨会话记忆，真正适配闲鱼真实聊天场景。
 
