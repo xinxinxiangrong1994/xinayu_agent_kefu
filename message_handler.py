@@ -429,6 +429,7 @@ class MessageHandler:
                                 product_info=data['product_info'].get("title", ""),
                                 order_status=data['order_status'],
                                 conversation_id=new_conv_id or conversation_id,
+                                user_msg_time=data.get('user_msg_time'),
                             )
                         else:
                             logger.error(f"[消息合并] 发送回复失败: {buyer_name}")
@@ -594,6 +595,10 @@ class MessageHandler:
         Returns:
             dict: 包含所有准备好的数据，或 None 如果应该跳过这个会话
         """
+        import datetime
+        # 记录用户消息的接收时间（用于日志显示）
+        user_msg_time = datetime.datetime.now().strftime("%H:%M:%S")
+
         buyer_name = conversation.get("buyer_name", "未知买家")
         conv_order_status = conversation.get("order_status", "")
         logger.info(f"处理会话: {buyer_name} (订单状态: {conv_order_status or '未知'})")
@@ -621,6 +626,19 @@ class MessageHandler:
         if not item_id:
             logger.debug("无法获取商品ID（可能是已完成交易），使用 unknown")
             item_id = "unknown"
+
+        # 从数据库获取商品信息并组装格式化字符串
+        if item_id and item_id != "unknown":
+            db_product = db_manager.get_product(item_id)
+            if db_product:
+                # 组装格式化的商品信息
+                formatted_info = "[当前会话-商品信息]\n"
+                formatted_info += f"标题：{db_product.get('title', '')}\n"
+                formatted_info += f"价格：{db_product.get('price', '')}\n"
+                if db_product.get('notes'):
+                    formatted_info += f"备注：{db_product.get('notes')}"
+                product_info["notes"] = formatted_info
+                logger.debug(f"获取到商品信息: {item_id}")
 
         # 构建自定义变量
         custom_vars = CozeVars.build(
@@ -742,6 +760,7 @@ class MessageHandler:
             'conversation_id': conversation_id,
             'customer_type': customer_type,
             'memory_prefix': memory_prefix,  # 历史上下文前缀（如有）
+            'user_msg_time': user_msg_time,  # 用户消息接收时间
         }
 
     async def _handle_conversation(self, conversation: dict):
@@ -859,6 +878,7 @@ class MessageHandler:
                     product_info=data['product_info'].get("title", ""),
                     order_status=data['order_status'],
                     conversation_id=new_conv_id or data['conversation_id'],
+                    user_msg_time=data.get('user_msg_time'),
                 )
             else:
                 logger.error(f"发送回复失败: {buyer_name}")
@@ -939,6 +959,7 @@ class ManualMessageHandler(MessageHandler):
                     product_info=data['product_info'].get("title", ""),
                     order_status=data['order_status'],
                     conversation_id=new_conv_id or data.get('conversation_id', ''),
+                    user_msg_time=data.get('user_msg_time'),
                 )
             else:
                 logger.error(f"发送回复失败: {buyer_name}")

@@ -109,6 +109,38 @@ class DBManager:
                     cursor.execute("ALTER TABLE user_sessions ADD COLUMN product_title VARCHAR(100) COMMENT '商品标题（前15字）' AFTER buyer_name")
                     logger.info("已添加 product_title 列到 user_sessions 表")
 
+                # 创建商品信息表
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS products (
+                        item_id VARCHAR(50) PRIMARY KEY COMMENT '商品ID',
+                        title VARCHAR(255) COMMENT '商品标题',
+                        price VARCHAR(20) COMMENT '商品价格',
+                        notes TEXT COMMENT '备注',
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """)
+
+                # 检查并添加 price 列（兼容旧表）
+                cursor.execute("""
+                    SELECT COUNT(*) as cnt FROM information_schema.columns
+                    WHERE table_schema = DATABASE()
+                    AND table_name = 'products' AND column_name = 'price'
+                """)
+                if cursor.fetchone()['cnt'] == 0:
+                    cursor.execute("ALTER TABLE products ADD COLUMN price VARCHAR(20) COMMENT '商品价格' AFTER title")
+                    logger.info("已添加 price 列到 products 表")
+
+                # 检查并添加 notes 列（备注字段）
+                cursor.execute("""
+                    SELECT COUNT(*) as cnt FROM information_schema.columns
+                    WHERE table_schema = DATABASE()
+                    AND table_name = 'products' AND column_name = 'notes'
+                """)
+                if cursor.fetchone()['cnt'] == 0:
+                    cursor.execute("ALTER TABLE products ADD COLUMN notes TEXT COMMENT '备注' AFTER price")
+                    logger.info("已添加 notes 列到 products 表")
+
             self.connection.commit()
             logger.info("数据表初始化成功")
             return True
@@ -547,19 +579,6 @@ class DBManager:
             logger.error(f"获取用户会话列表失败: {e}")
             return []
 
-    def get_user_other_sessions(self, user_id: str, exclude_item_id: str) -> list:
-        """获取用户的其他会话（排除指定商品）"""
-        try:
-            with self.connection.cursor() as cursor:
-                cursor.execute(
-                    "SELECT * FROM user_sessions WHERE user_id = %s AND item_id != %s ORDER BY updated_at DESC",
-                    (user_id, exclude_item_id)
-                )
-                return cursor.fetchall()
-        except Exception as e:
-            logger.error(f"获取用户其他会话失败: {e}")
-            return []
-
     def update_session_summary(self, user_id: str, item_id: str, summary: str) -> bool:
         """更新会话摘要"""
         try:
@@ -578,6 +597,7 @@ class DBManager:
     def get_all_sessions_with_status(self) -> list:
         """获取所有会话及其状态（用于GUI显示）"""
         try:
+            self._ensure_connection()
             with self.connection.cursor() as cursor:
                 # 关联 users 表获取白名单状态
                 cursor.execute("""
@@ -739,6 +759,19 @@ class DBManager:
             logger.error(f"清空conversation_id失败: {e}")
             return False
 
+    def clear_user_sessions(self):
+        """清空 user_sessions 表"""
+        try:
+            self._ensure_connection()
+            with self.connection.cursor() as cursor:
+                cursor.execute("DELETE FROM user_sessions")
+                self.connection.commit()
+                logger.info("已清空 user_sessions 表")
+                return True
+        except Exception as e:
+            logger.error(f"清空 user_sessions 表失败: {e}")
+            return False
+
     def clear_all_tables(self):
         """清空所有表的数据（保留表结构）"""
         try:
@@ -753,6 +786,64 @@ class DBManager:
                 return True
         except Exception as e:
             logger.error(f"清空数据库表失败: {e}")
+            return False
+
+    # ========== products 表操作方法 ==========
+
+    def add_or_update_product(self, item_id: str, title: str, price: str = None, notes: str = None) -> bool:
+        """添加或更新商品信息"""
+        try:
+            self._ensure_connection()
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO products (item_id, title, price, notes)
+                    VALUES (%s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        title = VALUES(title),
+                        price = VALUES(price),
+                        notes = VALUES(notes),
+                        updated_at = NOW()
+                """, (item_id, title, price, notes))
+            self.connection.commit()
+            logger.info(f"保存商品: item_id={item_id}, title={title}, price={price}")
+            return True
+        except Exception as e:
+            logger.error(f"保存商品失败: {e}")
+            return False
+
+    def get_product(self, item_id: str) -> dict:
+        """获取商品信息"""
+        try:
+            self._ensure_connection()
+            with self.connection.cursor() as cursor:
+                cursor.execute("SELECT * FROM products WHERE item_id = %s", (item_id,))
+                return cursor.fetchone()
+        except Exception as e:
+            logger.error(f"获取商品失败: {e}")
+            return None
+
+    def get_all_products(self) -> list:
+        """获取所有商品列表"""
+        try:
+            self._ensure_connection()
+            with self.connection.cursor() as cursor:
+                cursor.execute("SELECT * FROM products ORDER BY updated_at DESC")
+                return cursor.fetchall()
+        except Exception as e:
+            logger.error(f"获取商品列表失败: {e}")
+            return []
+
+    def delete_product(self, item_id: str) -> bool:
+        """删除商品"""
+        try:
+            self._ensure_connection()
+            with self.connection.cursor() as cursor:
+                cursor.execute("DELETE FROM products WHERE item_id = %s", (item_id,))
+            self.connection.commit()
+            logger.info(f"删除商品: item_id={item_id}")
+            return True
+        except Exception as e:
+            logger.error(f"删除商品失败: {e}")
             return False
 
 

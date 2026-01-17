@@ -19,6 +19,11 @@
       "name": "order_status",
       "desc": "订单状态",
       "enabled": true
+    },
+    "product_info": {
+      "name": "product_info",
+      "desc": "商品信息",
+      "enabled": true
     }
   },
   "status_mapping": {
@@ -79,5 +84,6 @@
       "system_msg": "退款成功"
     }
   },
-  "prompt": ""
+  "prompt": "",
+  "title_grab_length": 30
 }

@@ -28,9 +28,8 @@ DEFAULT_STATUS_MAPPING = {
 # 默认Coze变量配置
 DEFAULT_COZE_VARS = {
     'buyer_name': {'name': 'buyer_name', 'desc': '买家用户名', 'enabled': True},
-    'product_title': {'name': 'product_title', 'desc': '商品标题', 'enabled': True},
-    'product_price': {'name': 'product_price', 'desc': '商品价格', 'enabled': True},
     'order_status': {'name': 'order_status', 'desc': '订单状态', 'enabled': True},
+    'product_info': {'name': 'product_info', 'desc': '商品信息', 'enabled': True},
 }
 
 
@@ -56,9 +55,8 @@ class CozeVars:
 
     # 默认变量名（可被配置文件覆盖）
     BUYER_NAME = "buyer_name"           # 买家用户名
-    PRODUCT_TITLE = "product_title"     # 商品标题
-    PRODUCT_PRICE = "product_price"     # 商品价格
     ORDER_STATUS = "order_status"       # 订单状态
+    PRODUCT_INFO = "product_info"       # 商品信息
 
     @classmethod
     def _get_config(cls):
@@ -136,16 +134,14 @@ class CozeVars:
 
         # 商品信息
         if product_info:
-            if product_info.get("title") and cls.is_var_enabled('product_title'):
-                var_name = cls.get_var_name('product_title')
-                variables[var_name] = product_info.get("title", "")
-            if product_info.get("price") and cls.is_var_enabled('product_price'):
-                var_name = cls.get_var_name('product_price')
-                variables[var_name] = product_info.get("price", "")
             # 优先从 product_info 获取订单状态
             if product_info.get("order_status") and cls.is_var_enabled('order_status'):
                 var_name = cls.get_var_name('order_status')
                 variables[var_name] = product_info.get("order_status", "")
+            # 商品备注信息（包含标题、价格等完整信息）
+            if product_info.get("notes") and cls.is_var_enabled('product_info'):
+                var_name = cls.get_var_name('product_info')
+                variables[var_name] = product_info.get("notes", "")
 
         # 如果单独传入了 order_status，覆盖 product_info 中的值
         if order_status and cls.is_var_enabled('order_status'):

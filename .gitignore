@@ -2,14 +2,24 @@
 __pycache__/
 *.py[cod]
 *.pyo
+*.pyw
+.Python
+env/
+venv/
+.venv/
+
+# 环境变量（包含敏感信息）
 .env
+.env.local
+.env.*.local
 
 # 打包输出
 build/
 dist/
 *.spec
+*.exe
 
-# 浏览器缓存
+# 浏览器数据（包含登录状态、cookies等）
 browser_data/
 
 # 日志
@@ -19,3 +29,33 @@ logs/
 # 临时文件
 nul
 *.tmp
+tmpclaude-*
+temp_*.py
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 测试文件（可选，根据需要保留）
+# test_*.py
+
+# Claude 配置（本地开发用）
+.claude/
+CLAUDE_CONTEXT.md
+
+# 数据库备份（可能包含用户数据）
+*.sql
+
+# 对话历史和原型文件
+conversation_history.txt
+gui_prototype.html
+GUI原型图/
+
+# 启动脚本（本地配置）
+启动.bat
