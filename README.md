@@ -79,10 +79,40 @@
 ## 📱 交流群
 欢迎加入项目交流群，交流技术、分享经验、互助学习。
 <div align="center">
-  <img src="./场景案例/coze.png" width="600">
+  <img src="./场景案例/A-group.jpg" width="600">
   <p>coze对话流</p>
 </div>
 
+## 💼 寻找机会
+🔍 寻求方向：AI产品经理
+📫 WX：15701327230； Email：740074553@qq.com
+
+
+## ☕ 请喝咖啡
+您的☕和⭐将助力项目持续更新：
+
+
+
+## ❤️ 赞助支持
+
+如果您觉得这个项目对您有帮助，请考虑赞助支持项目的持续开发。您的支持是我们最大的动力！
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">
+        <img src="./docs/wechat_pay.png" width="200" alt="微信支付">
+        <br>
+        <b>微信支付</b>
+      </td>
+      <td align="center">
+        <img src="./docs/alipay.png" width="200" alt="支付宝">
+        <br>
+        <b>支付宝</b>
+      </td>
+    </tr>
+  </table>
+</div>
 
 
 
