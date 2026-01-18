@@ -1074,6 +1074,7 @@ AI：已经是最低价了呢，质量绝对有保障。
         bot_id_entry = ttk.Entry(row2, textvariable=self.bot_id_var, width=50)
         bot_id_entry.pack(side="left", padx=5)
         bot_id_entry.bind("<FocusOut>", lambda e: self._auto_save_config())
+        ttk.Button(row2, text="测试连接", command=self._test_coze_connection).pack(side="left", padx=20)
 
         # 数据库配置
         db_frame = ttk.LabelFrame(page, text="数据库配置 (对话记忆)", padding=15)
@@ -1287,6 +1288,49 @@ AI：已经是最低价了呢，质量绝对有保障。
         except Exception as e:
             messagebox.showerror("错误", f"数据库连接失败: {e}")
             self._log(f"数据库连接失败: {e}")
+
+    def _test_coze_connection(self):
+        """测试Coze API连接"""
+        api_token = self.api_token_var.get().strip()
+        bot_id = self.bot_id_var.get().strip()
+
+        if not api_token:
+            messagebox.showerror("错误", "请先填写 Coze API Token")
+            return
+        if not bot_id:
+            messagebox.showerror("错误", "请先填写 Coze Bot ID")
+            return
+
+        # 检查 token 格式
+        if api_token.startswith('/') or ':/' in api_token or api_token.endswith('.bat'):
+            messagebox.showerror("错误", "API Token 格式错误！\n\n看起来你填的是文件路径，请填写正确的 Coze API Token。\n\n正确格式示例：pat_xxxxxxxxxxxxxxxx")
+            return
+
+        try:
+            import httpx
+            headers = {
+                "Authorization": f"Bearer {api_token}",
+                "Content-Type": "application/json"
+            }
+            # 使用 Coze API 获取 bot 信息来测试连接
+            with httpx.Client(timeout=10) as client:
+                response = client.get(
+                    f"https://api.coze.cn/v1/bot/get_online_info?bot_id={bot_id}",
+                    headers=headers
+                )
+                result = response.json()
+
+                if result.get("code") == 0:
+                    bot_name = result.get("data", {}).get("name", "未知")
+                    messagebox.showinfo("成功", f"Coze API 连接成功！\n\nBot 名称: {bot_name}")
+                    self._log(f"Coze API 连接测试成功，Bot: {bot_name}")
+                else:
+                    error_msg = result.get("msg", "未知错误")
+                    messagebox.showerror("错误", f"Coze API 连接失败:\n{error_msg}")
+                    self._log(f"Coze API 连接失败: {error_msg}")
+        except Exception as e:
+            messagebox.showerror("错误", f"Coze API 连接失败:\n{e}")
+            self._log(f"Coze API 连接失败: {e}")
 
     def _load_coze_vars_config(self):
         """加载Coze变量配置"""

@@ -1,4 +1,5 @@
 """生成完整功能方案文档 DOCX"""
+from pathlib import Path
 from docx import Document
 from docx.shared import Inches, Pt, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -515,9 +516,9 @@ def create_document():
     doc.add_paragraph()
     doc.add_paragraph('— 文档结束 —')
 
-    # 保存文档
-    output_path = r'C:\Users\pc\Desktop\RPA\docs\闲鱼智能客服RPA_技术方案文档.docx'
-    doc.save(output_path)
+    # 保存文档（使用相对路径）
+    output_path = Path(__file__).parent / '闲鱼智能客服RPA_技术方案文档.docx'
+    doc.save(str(output_path))
     print(f'文档已保存: {output_path}')
     return output_path
 
