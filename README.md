@@ -1,8 +1,8 @@
-# 🤖 Xianyu SmartCS - 闲鱼智能客服系统
+# 🤖 Xianyu Smart2.0 - 闲鱼智能客服系统
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue) ![LLM](https://img.shields.io/badge/LLM-Powered-green) ![Multimodal](https://img.shields.io/badge/多模态-Vision-orange)
 
-专为闲鱼卖家打造的 AI 智能客服解决方案，支持多模态理解、消息聚合回复、跨会话记忆，真正适配闲鱼真实聊天场景。
+专为闲鱼小商家打造的AI智能客服，经本人真实店铺实战打磨，懂人话不废话，会主动聊出单，支持多模态理解、消息聚合回复、跨会话记忆，支持后台静默运行，边挂机边工作，互不干扰。稳定可靠。
 
 ## ✨ 核心特性
 
@@ -34,16 +34,14 @@
 
 | 模块 | 已实现 | 规划中 |
 |------|--------|--------|
-| 对话引擎 | ✅ LLM自动回复 ✅ 多模态图片理解 ✅ 上下文记忆 | 🔄 情感分析增强 |
-| 消息处理 | ✅ 消息队列聚合 ✅ 跨会话记忆 | 🔄 智能优先级排序 |
-| 场景识别 | ✅ 售前/售后路由 ✅ 意图识别 | 🔄 试探性异议识别 |
-| 平台集成 | ✅ 闲鱼窗口管理 ✅ 商品信息同步 | 🔄 订单状态自动获取 |
-| 主动营销 | ✅ 沉默用户激活 | 🔄 智能跟进策略 |
+| 对话引擎 | ✅ LLM自动回复 ✅ 多模态图片理解 ✅ 上下文记忆 |
+| 消息处理 | ✅ 消息队列聚合 ✅ 跨会话记忆 |
+| 场景识别 | ✅ 售前/售后路由 ✅ 意图识别 |
+| 平台集成 | ✅ 闲鱼窗口管理 ✅ 商品信息同步 |
+| 主动营销 | ✅ 沉默用户激活 |
 <div>&nbsp;</div>
 
-## 🚀 为什么选择我们？
-
-> **不是 Demo，是真实场景打磨出来的系统**
+## 🚀 不是 Demo，是真实场景打磨出来的系统
 
 | 普通客服机器人 | 我们 |
 |----------------|------|
@@ -76,39 +74,36 @@
 <div>&nbsp;</div>
 <div>&nbsp;</div>
 
+## 安装教程
+https://ecncmtdnxdpn.feishu.cn/wiki/CCsYwBzXYir18Akf8SecnYqunEf
+<div>&nbsp;</div>
+<div>&nbsp;</div>
+
 ## 📱 交流群
 欢迎加入项目交流群，交流技术、分享经验、互助学习。
 <div align="center">
   <img src="./场景案例/A-group.jpg" width="600">
-  <p>coze对话流</p>
 </div>
+<div>&nbsp;</div>
 
 ## 💼 寻找机会
 🔍 寻求方向：AI产品经理
 📫 WX：15701327230； Email：740074553@qq.com
-
-
-## ☕ 请喝咖啡
-您的☕和⭐将助力项目持续更新：
-
+<div>&nbsp;</div>
 
 
 ## ❤️ 赞助支持
-
-如果您觉得这个项目对您有帮助，请考虑赞助支持项目的持续开发。您的支持是我们最大的动力！
-
+制作不易，感谢佬友的支持~ 祝发财
 <div align="center">
   <table>
     <tr>
       <td align="center">
-        <img src="./docs/wechat_pay.png" width="200" alt="微信支付">
+        <img src="./场景案例/wechat_pay.jpg">
         <br>
-        <b>微信支付</b>
       </td>
       <td align="center">
-        <img src="./docs/alipay.png" width="200" alt="支付宝">
+        <img src="./场景案例/alipay.jpg">
         <br>
-        <b>支付宝</b>
       </td>
     </tr>
   </table>
