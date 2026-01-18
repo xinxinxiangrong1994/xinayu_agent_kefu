@@ -1118,6 +1118,13 @@ AI：已经是最低价了呢，质量绝对有保障。
         db_name_entry.bind("<FocusOut>", lambda e: self._auto_save_config())
         ttk.Button(row5, text="测试连接", command=self._test_db_connection).pack(side="left", padx=20)
 
+        # 保存配置按钮
+        save_frame = ttk.Frame(page)
+        save_frame.pack(fill="x", padx=20, pady=15)
+        ttk.Button(save_frame, text="💾 保存所有配置", command=self._save_config, width=20).pack(side="left")
+        self.save_status_var = tk.StringVar(value="")
+        ttk.Label(save_frame, textvariable=self.save_status_var, foreground="green").pack(side="left", padx=15)
+
         # Coze 工作流变量配置
         coze_vars_frame = ttk.LabelFrame(page, text="Coze 工作流变量配置", padding=15)
         coze_vars_frame.pack(fill="x", padx=20, pady=10)
@@ -1236,9 +1243,15 @@ AI：已经是最低价了呢，质量绝对有保障。
 
     def _save_config(self):
         """保存配置（带提示）"""
-        self._auto_save_config()
-        messagebox.showinfo("成功", "配置已保存！")
-        self._log("配置已保存")
+        try:
+            self._auto_save_config()
+            self.save_status_var.set("✓ 配置已保存")
+            self._log("配置已保存")
+            # 3秒后清除状态
+            self.root.after(3000, lambda: self.save_status_var.set(""))
+        except Exception as e:
+            self.save_status_var.set("✗ 保存失败")
+            messagebox.showerror("错误", f"保存配置失败: {e}")
 
     def _save_merge_config(self):
         """保存多消息合并配置"""
