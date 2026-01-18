@@ -1245,10 +1245,9 @@ AI：已经是最低价了呢，质量绝对有保障。
         """保存配置（带提示）"""
         try:
             self._auto_save_config()
-            self.save_status_var.set("✓ 配置已保存")
+            self.save_status_var.set("✓ 配置已保存，重启后生效")
             self._log("配置已保存")
-            # 3秒后清除状态
-            self.root.after(3000, lambda: self.save_status_var.set(""))
+            messagebox.showinfo("保存成功", "配置已保存！\n\n部分配置需要重启客户端后生效。")
         except Exception as e:
             self.save_status_var.set("✗ 保存失败")
             messagebox.showerror("错误", f"保存配置失败: {e}")
