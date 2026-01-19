@@ -124,6 +124,8 @@ class MessageHandler:
         self.inactive_message = Config.INACTIVE_MESSAGE
         self.inactive_skip_response = Config.INACTIVE_SKIP_RESPONSE
         self.running = False
+        # 暂停状态（由GUI控制）
+        self.is_paused = False
         # inactive 处理锁，避免与消息处理冲突
         self._inactive_lock = asyncio.Lock()
         # 每个用户的 inactive 定时器
@@ -202,11 +204,22 @@ class MessageHandler:
         """消息监控主循环"""
         while self.running:
             try:
+                # 检查暂停状态
+                if self.is_paused:
+                    # 暂停时只等待，不处理消息
+                    await asyncio.sleep(Config.XIANYU_CHECK_INTERVAL)
+                    continue
+
                 # 获取未读会话
                 unread_conversations = await self.browser.get_unread_conversations()
 
                 for conv in unread_conversations:
                     if not self.running:
+                        break
+
+                    # 检查暂停状态（循环中也要检查）
+                    if self.is_paused:
+                        logger.info("[暂停] 检测到暂停，停止处理当前批次")
                         break
 
                     # 直接处理每个未读会话

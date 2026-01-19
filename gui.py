@@ -8,6 +8,7 @@ import os
 import json
 import ctypes
 from pathlib import Path
+from PIL import Image, ImageDraw, ImageTk, ImageFont
 
 # 确保能找到其他模块
 sys.path.insert(0, str(Path(__file__).parent))
@@ -35,11 +36,13 @@ class XianyuGUI:
 
         # 状态变量
         self.is_running = False
+        self.is_paused = False
         self.handler = None
         self.loop = None
         self.thread = None
         self.show_debug_logs = False
         self.log_handler_id = None
+        self.float_ball = None  # 悬浮球窗口
 
         # 控制台窗口状态
         self.console_visible = False
@@ -2054,11 +2057,15 @@ AI：已经是最低价了呢，质量绝对有保障。
         self._auto_save_config()
 
         self.is_running = True
+        self.is_paused = False  # 重置暂停状态
         self.start_btn.config(text="停止")
         self.status_var.set("运行中...")
         self.status_label.config(fg="green")
 
         self._log("正在启动...")
+
+        # 显示悬浮球
+        self._show_float_ball()
 
         self.thread = threading.Thread(target=self._run_handler, daemon=True)
         self.thread.start()
@@ -2095,9 +2102,14 @@ AI：已经是最低价了呢，质量绝对有保障。
     def _on_stopped(self):
         """停止后处理"""
         self.is_running = False
+        self.is_paused = False  # 重置暂停状态
         self.start_btn.config(text="启动")
         self.status_var.set("已停止")
         self.status_label.config(fg="gray")
+
+        # 隐藏悬浮球
+        self._hide_float_ball()
+
         self._log("已停止")
 
     def run(self):
@@ -2110,9 +2122,262 @@ AI：已经是最低价了呢，质量绝对有保障。
         if self.is_running:
             if messagebox.askokcancel("确认", "程序正在运行，确定要退出吗？"):
                 self._stop()
+                self._destroy_float_ball()
                 self.root.destroy()
         else:
+            self._destroy_float_ball()
             self.root.destroy()
+
+    # ==================== 悬浮球功能 ====================
+    def _create_float_ball_image(self, icon_type="pause"):
+        """使用 PIL 创建iOS风格3D效果的悬浮球图片
+
+        Args:
+            icon_type: "pause" 暂停图标(两条竖线), "play" 播放图标(三角形)
+        """
+        # 使用4倍大小绘制，然后缩小以获得抗锯齿效果
+        scale = 4
+        size = self._ball_size * scale
+
+        # 透明色（必须和窗口的 transparentcolor 一致）
+        trans_color = (1, 1, 1)  # #010101
+
+        # 创建背景为透明色的图片
+        img = Image.new('RGBA', (size, size), (*trans_color, 255))
+        draw = ImageDraw.Draw(img)
+
+        # 基础黄色
+        base_color = (255, 229, 0)  # #FFE500
+
+        # 绘制圆形背景（底色稍暗，模拟3D效果）
+        darker_color = (230, 200, 0)  # 底部稍暗
+        draw.ellipse([0, 0, size - 1, size - 1], fill=darker_color)
+
+        # 绘制主体渐变效果（从上到下，亮到暗）
+        for i in range(size // 2):
+            # 计算渐变颜色（顶部亮，底部暗）
+            ratio = i / (size // 2)
+            r = int(255 - ratio * 25)
+            g = int(229 - ratio * 29)
+            b = int(0)
+            # 绘制椭圆切片
+            y_top = i
+            y_bottom = size - i
+            if y_top < y_bottom:
+                draw.ellipse([i, y_top, size - i, y_bottom], fill=(r, g, b))
+
+        # 重新绘制主圆（确保边缘清晰）
+        draw.ellipse([2, 2, size - 3, size - 3], fill=base_color)
+
+        # 绘制高光效果（顶部光泽）- iOS风格
+        highlight_height = size // 3
+        highlight_img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+        highlight_draw = ImageDraw.Draw(highlight_img)
+
+        # 顶部高光椭圆
+        highlight_draw.ellipse(
+            [size // 6, 4, size - size // 6, highlight_height + 20],
+            fill=(255, 255, 255, 80)  # 半透明白色
+        )
+        # 合并高光
+        img = Image.alpha_composite(img, highlight_img)
+        draw = ImageDraw.Draw(img)
+
+        # 绘制底部阴影（轻微）
+        shadow_img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+        shadow_draw = ImageDraw.Draw(shadow_img)
+        shadow_draw.ellipse(
+            [size // 6, size - highlight_height - 10, size - size // 6, size - 8],
+            fill=(180, 150, 0, 60)  # 半透明深黄
+        )
+        img = Image.alpha_composite(img, shadow_img)
+        draw = ImageDraw.Draw(img)
+
+        cx, cy = size // 2, size // 2
+        icon_color = (61, 61, 61)  # #3D3D3D 深灰色图标
+
+        if icon_type == "pause":
+            # 绘制暂停图标（两条圆角竖线）
+            bar_width = 18
+            bar_height = 70
+            gap = 14
+            radius = 6
+
+            # 左边竖线
+            x1, y1 = cx - gap - bar_width, cy - bar_height // 2
+            x2, y2 = cx - gap, cy + bar_height // 2
+            draw.rounded_rectangle([x1, y1, x2, y2], radius=radius, fill=icon_color)
+
+            # 右边竖线
+            x1, y1 = cx + gap, cy - bar_height // 2
+            x2, y2 = cx + gap + bar_width, cy + bar_height // 2
+            draw.rounded_rectangle([x1, y1, x2, y2], radius=radius, fill=icon_color)
+
+        elif icon_type == "play":
+            # 绘制播放图标（三角形）
+            triangle_size = 36
+            offset_x = 8
+            points = [
+                (cx - triangle_size + offset_x, cy - triangle_size - 4),
+                (cx - triangle_size + offset_x, cy + triangle_size + 4),
+                (cx + triangle_size + offset_x, cy),
+            ]
+            draw.polygon(points, fill=icon_color)
+
+        # 缩小到目标大小（高质量抗锯齿）
+        img = img.resize((self._ball_size, self._ball_size), Image.Resampling.LANCZOS)
+
+        # 清理边缘
+        pixels = img.load()
+        for y in range(self._ball_size):
+            for x in range(self._ball_size):
+                r, g, b, a = pixels[x, y]
+                if r < 50 and g < 50 and b < 50 and not (55 <= r <= 65 and 55 <= g <= 65 and 55 <= b <= 65):
+                    pixels[x, y] = (1, 1, 1, 255)
+
+        return ImageTk.PhotoImage(img)
+
+    def _create_float_ball(self):
+        """创建悬浮球窗口"""
+        if self.float_ball is not None:
+            return
+
+        # 尺寸定义
+        self._ball_size = 56
+
+        self.float_ball = tk.Toplevel(self.root)
+        self.float_ball.title("")
+        self.float_ball.overrideredirect(True)  # 无边框
+        self.float_ball.attributes("-topmost", True)  # 始终置顶
+
+        # 获取屏幕尺寸，放在右下角
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        x = screen_width - self._ball_size - 50
+        y = screen_height - self._ball_size - 100
+
+        self.float_ball.geometry(f"{self._ball_size}x{self._ball_size}+{x}+{y}")
+
+        # 设置窗口背景为透明色（Windows）
+        transparent_color = "#010101"
+        self.float_ball.config(bg=transparent_color)
+        self.float_ball.attributes("-transparentcolor", transparent_color)
+
+        # 创建画布
+        self.float_ball_canvas = tk.Canvas(
+            self.float_ball,
+            width=self._ball_size,
+            height=self._ball_size,
+            highlightthickness=0,
+            bg=transparent_color
+        )
+        self.float_ball_canvas.pack(fill="both", expand=True)
+
+        # 预先创建两种状态的图片（保持引用防止被垃圾回收）
+        # 运行中：亮黄色 + 暂停图标（点击可暂停）
+        self._running_image = self._create_float_ball_image(icon_type="pause")
+        # 已暂停：亮黄色 + 播放图标（点击可恢复）
+        self._paused_image = self._create_float_ball_image(icon_type="play")
+
+        # 在画布上显示图片
+        self._ball_image_id = self.float_ball_canvas.create_image(
+            self._ball_size // 2, self._ball_size // 2,
+            image=self._running_image
+        )
+
+        # 绑定拖拽事件
+        self.float_ball_canvas.bind("<Button-1>", self._on_float_ball_click)
+        self.float_ball_canvas.bind("<B1-Motion>", self._on_float_ball_drag)
+        self.float_ball_canvas.bind("<ButtonRelease-1>", self._on_float_ball_release)
+
+        # 拖拽状态
+        self._drag_data = {"x": 0, "y": 0, "dragging": False}
+
+        # 更新悬浮球状态
+        self._update_float_ball_status()
+
+    def _on_float_ball_click(self, event):
+        """悬浮球点击开始"""
+        self._drag_data["x"] = event.x
+        self._drag_data["y"] = event.y
+        self._drag_data["dragging"] = False
+        self._drag_data["start_x"] = event.x
+        self._drag_data["start_y"] = event.y
+
+    def _on_float_ball_drag(self, event):
+        """悬浮球拖拽"""
+        # 计算移动距离，判断是否是拖拽
+        dx = abs(event.x - self._drag_data.get("start_x", event.x))
+        dy = abs(event.y - self._drag_data.get("start_y", event.y))
+        if dx > 5 or dy > 5:
+            self._drag_data["dragging"] = True
+
+        if self._drag_data["dragging"]:
+            x = self.float_ball.winfo_x() + (event.x - self._drag_data["x"])
+            y = self.float_ball.winfo_y() + (event.y - self._drag_data["y"])
+            self.float_ball.geometry(f"+{x}+{y}")
+
+    def _on_float_ball_release(self, event):
+        """悬浮球点击释放"""
+        # 如果不是拖拽，则切换暂停状态
+        if not self._drag_data.get("dragging", False):
+            self._toggle_pause()
+        self._drag_data["dragging"] = False
+
+    def _toggle_pause(self):
+        """切换暂停/恢复状态"""
+        self.is_paused = not self.is_paused
+
+        # 同步到 handler
+        if self.handler:
+            self.handler.is_paused = self.is_paused
+
+        # 更新悬浮球状态
+        self._update_float_ball_status()
+
+        # 更新主界面状态
+        if self.is_paused:
+            self.status_var.set("已暂停")
+            self.status_label.config(fg="orange")
+            self._log("已暂停 - 新消息将进入等待队列")
+        else:
+            self.status_var.set("运行中...")
+            self.status_label.config(fg="green")
+            self._log("已恢复 - 继续处理消息")
+
+    def _update_float_ball_status(self):
+        """更新悬浮球显示状态"""
+        if self.float_ball is None or not self.float_ball.winfo_exists():
+            return
+
+        if self.is_paused:
+            # 暂停状态 - 灰色背景 + 暂停图标
+            self.float_ball_canvas.itemconfig(self._ball_image_id, image=self._paused_image)
+        else:
+            # 运行状态 - 闲鱼黄色 + "闲鱼"文字
+            self.float_ball_canvas.itemconfig(self._ball_image_id, image=self._running_image)
+
+    def _show_float_ball(self):
+        """显示悬浮球"""
+        if self.float_ball is None:
+            self._create_float_ball()
+        else:
+            self.float_ball.deiconify()
+        self._update_float_ball_status()
+
+    def _hide_float_ball(self):
+        """隐藏悬浮球"""
+        if self.float_ball is not None and self.float_ball.winfo_exists():
+            self.float_ball.withdraw()
+
+    def _destroy_float_ball(self):
+        """销毁悬浮球"""
+        if self.float_ball is not None:
+            try:
+                self.float_ball.destroy()
+            except:
+                pass
+            self.float_ball = None
 
 
 if __name__ == "__main__":
