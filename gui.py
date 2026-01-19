@@ -220,6 +220,15 @@ class XianyuGUI:
         )
         self.console_btn.pack(side="right", padx=5)
 
+        # 悬浮球显示复选框
+        self.float_ball_visible_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            control_frame,
+            text="悬浮球",
+            variable=self.float_ball_visible_var,
+            command=self._toggle_float_ball_visibility
+        ).pack(side="right", padx=5)
+
         # 运行日志区域
         log_frame = ttk.LabelFrame(page, text="运行日志", padding=10)
         log_frame.pack(fill="both", expand=True, padx=20, pady=10)
@@ -2289,6 +2298,11 @@ AI：已经是最低价了呢，质量绝对有保障。
         self.float_ball_canvas.bind("<Button-1>", self._on_float_ball_click)
         self.float_ball_canvas.bind("<B1-Motion>", self._on_float_ball_drag)
         self.float_ball_canvas.bind("<ButtonRelease-1>", self._on_float_ball_release)
+        self.float_ball_canvas.bind("<Button-3>", self._on_float_ball_right_click)  # 右键菜单
+
+        # 创建右键菜单
+        self._float_ball_menu = tk.Menu(self.float_ball, tearoff=0)
+        self._float_ball_menu.add_command(label="隐藏悬浮球", command=self._hide_float_ball_by_user)
 
         # 拖拽状态
         self._drag_data = {"x": 0, "y": 0, "dragging": False}
@@ -2323,6 +2337,27 @@ AI：已经是最低价了呢，质量绝对有保障。
         if not self._drag_data.get("dragging", False):
             self._toggle_pause()
         self._drag_data["dragging"] = False
+
+    def _on_float_ball_right_click(self, event):
+        """悬浮球右键点击 - 显示菜单"""
+        try:
+            self._float_ball_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self._float_ball_menu.grab_release()
+
+    def _hide_float_ball_by_user(self):
+        """用户主动隐藏悬浮球"""
+        self._hide_float_ball()
+        self.float_ball_visible_var.set(False)
+        self._log("悬浮球已隐藏，可在概览页重新显示")
+
+    def _toggle_float_ball_visibility(self):
+        """切换悬浮球显示/隐藏（由复选框控制）"""
+        if self.float_ball_visible_var.get():
+            if self.is_running:
+                self._show_float_ball()
+        else:
+            self._hide_float_ball()
 
     def _toggle_pause(self):
         """切换暂停/恢复状态"""
@@ -2359,6 +2394,10 @@ AI：已经是最低价了呢，质量绝对有保障。
 
     def _show_float_ball(self):
         """显示悬浮球"""
+        # 检查用户是否设置了隐藏悬浮球
+        if hasattr(self, 'float_ball_visible_var') and not self.float_ball_visible_var.get():
+            return
+
         if self.float_ball is None:
             self._create_float_ball()
         else:
