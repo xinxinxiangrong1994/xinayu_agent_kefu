@@ -30,7 +30,7 @@ class XianyuGUI:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("闲鱼智能客服 RPA")
-        self.root.geometry("1400x900")
+        self.root.geometry("1200x900")
         self.root.minsize(1000, 650)
         self.root.resizable(True, True)
 
