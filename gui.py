@@ -762,8 +762,11 @@ AI：已经是最低价了呢，质量绝对有保障。
                 from playwright.sync_api import sync_playwright
 
                 with sync_playwright() as p:
-                    browser = p.chromium.launch(headless=False)
-                    page = browser.new_page()
+                    context = p.chromium.launch_persistent_context(
+                        user_data_dir=Config.USER_DATA_DIR,
+                        headless=False,
+                    )
+                    page = context.pages[0] if context.pages else context.new_page()
                     page.goto(url, timeout=30000)
                     page.wait_for_load_state('networkidle', timeout=15000)
 
@@ -830,7 +833,7 @@ AI：已经是最低价了呢，质量绝对有保障。
                         }
                     """)
 
-                    browser.close()
+                    context.close()
 
                     title = result.get('description', '')
                     price = result.get('price', '')
