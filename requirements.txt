@@ -3,3 +3,4 @@ httpx>=0.25.0
 python-dotenv>=1.0.0
 loguru>=0.7.0
 pymysql>=1.1.0
+Pillow>=10.0.0
