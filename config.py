@@ -193,7 +193,7 @@ class Config:
 
     # 浏览器配置
     HEADLESS: bool = os.getenv("HEADLESS", "false").lower() == "true"
-    USER_DATA_DIR: str = "./browser_data"  # 浏览器数据目录，用于保持登录状态
+    USER_DATA_DIR: str = str(Path(__file__).parent / "browser_data")  # 浏览器数据目录，用于保持登录状态
 
     # MySQL数据库配置
     db_host: str = os.getenv("DB_HOST", "localhost")
