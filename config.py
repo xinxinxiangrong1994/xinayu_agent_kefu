@@ -194,6 +194,8 @@ class Config:
     # 浏览器配置
     HEADLESS: bool = os.getenv("HEADLESS", "false").lower() == "true"
     USER_DATA_DIR: str = str(Path(__file__).parent / "browser_data")  # 浏览器数据目录，用于保持登录状态
+    BROWSER_WIDTH: int = int(os.getenv("BROWSER_WIDTH", "1280"))  # 浏览器窗口宽度
+    BROWSER_HEIGHT: int = int(os.getenv("BROWSER_HEIGHT", "800"))  # 浏览器窗口高度
 
     # MySQL数据库配置
     db_host: str = os.getenv("DB_HOST", "localhost")

@@ -30,7 +30,7 @@ class XianyuGUI:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("闲鱼智能客服 RPA")
-        self.root.geometry("1200x750")
+        self.root.geometry("1400x900")
         self.root.minsize(1000, 650)
         self.root.resizable(True, True)
 
@@ -1130,6 +1130,24 @@ AI：已经是最低价了呢，质量绝对有保障。
         db_name_entry.bind("<FocusOut>", lambda e: self._auto_save_config())
         ttk.Button(row5, text="测试连接", command=self._test_db_connection).pack(side="left", padx=20)
 
+        # 浏览器窗口配置
+        browser_frame = ttk.LabelFrame(page, text="浏览器窗口配置", padding=15)
+        browser_frame.pack(fill="x", padx=20, pady=10)
+
+        browser_row = ttk.Frame(browser_frame)
+        browser_row.pack(fill="x", pady=5)
+        ttk.Label(browser_row, text="窗口宽度:", width=12).pack(side="left")
+        self.browser_width_var = tk.StringVar(value="1280")
+        browser_width_entry = ttk.Entry(browser_row, textvariable=self.browser_width_var, width=8)
+        browser_width_entry.pack(side="left", padx=5)
+        browser_width_entry.bind("<FocusOut>", lambda e: self._auto_save_config())
+        ttk.Label(browser_row, text="窗口高度:").pack(side="left", padx=(20, 5))
+        self.browser_height_var = tk.StringVar(value="800")
+        browser_height_entry = ttk.Entry(browser_row, textvariable=self.browser_height_var, width=8)
+        browser_height_entry.pack(side="left")
+        browser_height_entry.bind("<FocusOut>", lambda e: self._auto_save_config())
+        ttk.Label(browser_row, text="(修改后需重启客户端生效)", foreground="gray").pack(side="left", padx=15)
+
         # 保存配置按钮
         save_frame = ttk.Frame(page)
         save_frame.pack(fill="x", padx=20, pady=15)
@@ -1208,6 +1226,8 @@ AI：已经是最低价了呢，质量绝对有保障。
         self.merge_enabled_var.set(Config.MESSAGE_MERGE_ENABLED)
         self.merge_wait_var.set(str(Config.MESSAGE_MERGE_WAIT_SECONDS))
         self.merge_min_length_var.set(str(Config.MESSAGE_MERGE_MIN_LENGTH))
+        self.browser_width_var.set(os.getenv("BROWSER_WIDTH", "1280"))
+        self.browser_height_var.set(os.getenv("BROWSER_HEIGHT", "800"))
 
         # 加载 prompt
         if hasattr(self, 'prompt_content') and self.prompt_content:
@@ -1242,6 +1262,8 @@ AI：已经是最低价了呢，质量绝对有保障。
             set_key(str(self.env_path), "MESSAGE_MERGE_ENABLED", str(self.merge_enabled_var.get()).lower())
             set_key(str(self.env_path), "MESSAGE_MERGE_WAIT_SECONDS", self.merge_wait_var.get())
             set_key(str(self.env_path), "MESSAGE_MERGE_MIN_LENGTH", self.merge_min_length_var.get())
+            set_key(str(self.env_path), "BROWSER_WIDTH", self.browser_width_var.get())
+            set_key(str(self.env_path), "BROWSER_HEIGHT", self.browser_height_var.get())
 
             self._save_coze_vars_config()
             load_dotenv(self.env_path, override=True)
@@ -1250,6 +1272,8 @@ AI：已经是最低价了呢，质量绝对有保障。
             Config.MESSAGE_MERGE_ENABLED = self.merge_enabled_var.get()
             Config.MESSAGE_MERGE_WAIT_SECONDS = float(self.merge_wait_var.get())
             Config.MESSAGE_MERGE_MIN_LENGTH = int(self.merge_min_length_var.get())
+            Config.BROWSER_WIDTH = int(self.browser_width_var.get())
+            Config.BROWSER_HEIGHT = int(self.browser_height_var.get())
         except Exception as e:
             logger.error(f"自动保存配置失败: {e}")
 

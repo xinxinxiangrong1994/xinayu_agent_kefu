@@ -41,7 +41,7 @@ class XianyuBrowser:
         self.context = await self.playwright.chromium.launch_persistent_context(
             user_data_dir=Config.USER_DATA_DIR,
             headless=Config.HEADLESS,
-            viewport={"width": 1440, "height": 1100},
+            viewport={"width": Config.BROWSER_WIDTH, "height": Config.BROWSER_HEIGHT},
             locale="zh-CN",
         )
 
