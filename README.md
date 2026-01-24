@@ -82,7 +82,7 @@ https://ecncmtdnxdpn.feishu.cn/wiki/CCsYwBzXYir18Akf8SecnYqunEf
 ## 📱 交流群
 欢迎加入项目交流群，交流技术、分享经验、互助学习。
 <div align="center">
-  <img src="./场景案例/A-group.jpg" width="600">
+  <img src="./场景案例/A-group-1224.jpg" width="600">
 </div>
 <div>&nbsp;</div>
 
